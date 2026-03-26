@@ -22,6 +22,7 @@ public class SubsystemControls
     private final boolean indexer;
     private final boolean feeder;
     private final boolean fueldetection;
+    private final boolean drumlauncher;
 
      /**  
      * @param swerve
@@ -48,7 +49,8 @@ public class SubsystemControls
         @JsonProperty(required = true, value = "lights")      boolean lights,
         @JsonProperty(required = true, value = "indexer")     boolean indexer,
         @JsonProperty(required = true, value = "feeder")      boolean feeder,
-        @JsonProperty(required = true, value = "fueldetection") boolean fueldetection
+        @JsonProperty(required = true, value = "fueldetection") boolean fueldetection,
+        @JsonProperty(required = true, value = "drumlauncher") boolean drumlauncher
     )
 
     {
@@ -65,6 +67,7 @@ public class SubsystemControls
         this.indexer = indexer;
         this.feeder = feeder;
         this.fueldetection = fueldetection;
+        this.drumlauncher = drumlauncher;
     }
 
 
@@ -113,5 +116,8 @@ public class SubsystemControls
     }
     public boolean isFuelDetectionPresent() {
         return fueldetection;
+    }
+    public boolean isDrumLauncherPresent() {
+        return drumlauncher;
     }
 }

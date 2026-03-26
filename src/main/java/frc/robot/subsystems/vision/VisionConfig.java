@@ -17,46 +17,34 @@ import edu.wpi.first.units.measure.Distance;
 import edu.wpi.first.units.measure.LinearVelocity;
 import frc.lib.vision.Limelight.LimelightConfig;
 import frc.robot.Konstants.DriveConstants;
-import frc.robot.Konstants.VisionConstants.BackLimelight;
-import frc.robot.Konstants.VisionConstants.LimelightThree;
-import frc.robot.Konstants.VisionConstants.TurretLimelight;
 import frc.robot.RobotContainer;
 import frc.robot.subsystems.vision.SKVision.MultiLimelightCommandConfig;
 
 public final class VisionConfig {
-    /* Example:
-    public static final String RIGHT_LL = RightLimelight.kName;
-    public static final int RIGHT_TAG_PIPELINE = kAprilTagPipeline;
-    public static final LimelightConfig RIGHT_CONFIG = 
-                                        new LimelightConfig(RightLimelight.kName) // Yes, it's the same value as [NAME]_LL. Just left it like this to see constructor layout
-                                        .withTranslation(RightLimelight.kForward, RightLimelight.kRight, RightLimelight.kUp) // Feeds in the position of the limelight on the bot
-                                        .withRotation(RightLimelight.kRoll, RightLimelight.kPitch, RightLimelight.kYaw) // Feeds in rotation of limelight
-                                        .withAttached(RightLimelight.kAttached); // Whether or not the limelight is attached to the robot; if false, effectively disables limelight
-    */
-    public static final String BACK_LL = BackLimelight.kName;
-    public static final int BACK_TAG_PIPELINE = kAprilTagPipeline;
-    public static final LimelightConfig BACK_CONFIG = 
-                                        new LimelightConfig(BackLimelight.kName) // Yes, it's the same value as [NAME]_LL. Just left it like this to see constructor layout
-                                        .withTranslation(BackLimelight.kForward, BackLimelight.kRight, BackLimelight.kUp) // Feeds in the position of the limelight on the bot
-                                        .withRotation(BackLimelight.kRoll, BackLimelight.kPitch, BackLimelight.kYaw) // Feeds in rotation of limelight
-                                        .withAttached(BackLimelight.kAttached); // Whether or not the limelight is attached to the robot; if false, effectively disables limelight
-    
-    
-    public static final String TURRET_LL = TurretLimelight.kName;
-    public static final int TURRET_TAG_PIPELINE = kAprilTagPipeline;
-    public static final LimelightConfig TURRET_CONFIG = 
-                                        new LimelightConfig(TurretLimelight.kName) // Yes, it's the same value as [NAME]_LL. Just left it like this to see constructor layout
-                                        .withTranslation(TurretLimelight.kForward, TurretLimelight.kRight, TurretLimelight.kUp) // Feeds in the position of the limelight on the bot
-                                        .withRotation(TurretLimelight.kRoll, TurretLimelight.kPitch, TurretLimelight.kYaw) // Feeds in rotation of limelight
-                                        .withAttached(TurretLimelight.kAttached); // Whether or not the limelight is attached to the robot; if false, effectively disables limelight
 
-    public static final String LL_INTAKE = LimelightThree.kName;
-    public static final int INTAKE_TAG_PIPELINE = kAprilTagPipeline;
-    public static final LimelightConfig INTAKE_CONFIG = 
-                                        new LimelightConfig(LimelightThree.kName)
-                                        .withTranslation(LimelightThree.kForward, LimelightThree.kRight, LimelightThree.kUp)
-                                        .withRotation(LimelightThree.kRoll, LimelightThree.kPitch, LimelightThree.kYaw)
-                                        .withAttached(LimelightThree.kAttached);
+    // ── Single fixed Limelight 4 mounted to the chassis (no turret) ──
+
+    public static final String CHASSIS_LL = "limelight-chassis"; // NetworkTable hostname
+
+    // TODO: Measure the physical translation of the Limelight 4 from the center of the robot.
+    //       Forward = positive, Right = positive, Up = positive (all in meters).
+    private static final double kChassisForward = 0.0;  // TODO: measure and update
+    private static final double kChassisRight   = 0.0;  // TODO: measure and update
+    private static final double kChassisUp      = 0.0;  // TODO: measure and update
+
+    // TODO: Measure the physical rotation of the Limelight 4 on the chassis.
+    //       Roll/Pitch/Yaw in degrees using Limelight convention.
+    private static final double kChassisRoll  = 0.0;  // TODO: measure and update
+    private static final double kChassisPitch = 0.0;  // TODO: measure and update
+    private static final double kChassisYaw   = 0.0;  // TODO: measure and update
+
+    public static final int CHASSIS_TAG_PIPELINE = kAprilTagPipeline;
+
+    public static final LimelightConfig CHASSIS_LL_CONFIG =
+                                        new LimelightConfig(CHASSIS_LL)
+                                        .withTranslation(kChassisForward, kChassisRight, kChassisUp)
+                                        .withRotation(kChassisRoll, kChassisPitch, kChassisYaw)
+                                        .withAttached(true);
 
 
     // Standard deviations for vision measurements (in meters and degrees)

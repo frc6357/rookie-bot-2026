@@ -21,10 +21,9 @@ import edu.wpi.first.math.Vector;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.lib.utils.Field;
@@ -40,17 +39,12 @@ public class SKVision extends SubsystemBase {
     private SKSwerve m_swerve;
 
     // Declare your limelights here and write their hostnames in a comment next to each limelight
-    /* Example:
-    public final Limelight rightLL = new Limelight(VisionConfig.RIGHT_CONFIG); // limelight-front
-    */
-    public final Limelight backLL = new Limelight(VisionConfig.BACK_CONFIG); // limelight-front
-    public final Limelight turretLL = new Limelight(VisionConfig.TURRET_CONFIG); // limelight-turret
-    public final Limelight intakeLL = new Limelight(VisionConfig.INTAKE_CONFIG); // limelight-intake
+    public final Limelight chassisLL = new Limelight(VisionConfig.CHASSIS_LL_CONFIG); // limelight-chassis
     
     // Array of all limelights
-    public final Limelight[] allLimelights = {turretLL}; 
+    public final Limelight[] allLimelights = {chassisLL}; 
     // Limelights for pose estimation; order them from most used with best view to least used with worst view
-    public final Limelight[] poseLimelights = {turretLL}; 
+    public final Limelight[] poseLimelights = {chassisLL}; 
     
     
     private Pose3d[] emptyPose3dArray = new Pose3d[0];
@@ -68,8 +62,6 @@ public class SKVision extends SubsystemBase {
     // Creates an ArrayList to store estimated vision poses during autonomous
     public ArrayList<Trio<Pose3d, Pose2d, Double>> multiCamPoses = new ArrayList<Trio<Pose3d, Pose2d, Double>>();
 
-    StructPublisher<Pose3d> turretLimelightPosePublisher = NetworkTableInstance.getDefault().getStructTopic("TurretLLPose", Pose3d.struct).publish();
-    
     
         // Data extraction record (groups related vision measurement data)
         // Package-private for testing
@@ -91,7 +83,6 @@ public class SKVision extends SubsystemBase {
             () -> new IllegalArgumentException("SKSwerve is required for SKVision")
         );
         startupLimelights();
-        turretLL.setIMUMode(IMUMode.EXTERNAL_ONLY);
     }
 
     @Override
@@ -637,6 +628,35 @@ public class SKVision extends SubsystemBase {
 
         m_swerve.setVisionMeasurementStdDevs(stdDevs);
         m_swerve.addVisionMeasurement(integratedPose, timeStamp);
+    }
+
+    // TODO: Update this constant once hub shift logic is in place
+    // TODO: Move kHubX and kHubY into Konstants.VisionConstants
+    private static final Translation2d kHubTranslation =
+            new Translation2d(0.0, 0.0); // TODO: set actual hub coordinates
+
+    /**
+     * Returns the straight-line distance in meters from the robot's current
+     * estimated pose to the fixed hub translation.
+     *
+     * @return distance in meters, or -1.0 if swerve is unavailable
+     */
+    @AutoLogOutput
+    public double getDistanceToHub() {
+        if (m_swerve == null) return -1.0;
+        return m_swerve.getRobotPose().getTranslation().getDistance(kHubTranslation);
+    }
+
+    /**
+     * Returns the straight-line distance in meters from the robot's current
+     * estimated pose to the given field point.
+     *
+     * @param target the field-relative point to measure distance to
+     * @return distance in meters, or -1.0 if swerve is unavailable
+     */
+    public double getDistanceTo(Translation2d target) {
+        if (m_swerve == null) return -1.0;
+        return m_swerve.getRobotPose().getTranslation().getDistance(target);
     }
 
     /** If at least one limelight has an accurate pose */
