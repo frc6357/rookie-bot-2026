@@ -26,7 +26,9 @@ import frc.lib.utils.SubsystemControls;
 import frc.lib.utils.filters.FilteredJoystick;
 import frc.lib.bindings.CommandBinder;
 import frc.robot.bindings.SKSwerveBinder;
+import frc.robot.bindings.SKVisionBinder;
 import frc.robot.subsystems.drive.SKSwerve;
+import frc.robot.subsystems.drumlauncher.SK26DrumLauncher;
 import frc.robot.subsystems.vision.SKVision;
 
 
@@ -50,9 +52,11 @@ public class RobotContainer extends Robot{
 
   public Optional<SKSwerve> m_swerveContainer = Optional.empty();
   public Optional<SKVision> m_visionContainer = Optional.empty();
+  public Optional<SK26DrumLauncher> m_drumLauncherContainer = Optional.empty();
 
   public static SKSwerve m_swerveInstance;
   public static SKVision m_visionInstance;
+  public static SK26DrumLauncher drumLauncher;
 
   // The list containing all the command binding classes
   public List<CommandBinder> buttonBinders = new ArrayList<CommandBinder>();
@@ -101,6 +105,11 @@ public class RobotContainer extends Robot{
                 m_visionContainer = Optional.of(new SKVision(m_swerveContainer));
                 m_visionInstance = m_visionContainer.get();
             }
+            // TODO: SK26DrumLauncher class is pending implementation
+            if (subsystems.isDrumLauncherPresent()) {
+                drumLauncher = new SK26DrumLauncher();
+                m_drumLauncherContainer = Optional.of(drumLauncher);
+            }
         }
         catch (IOException e)
         {
@@ -117,6 +126,7 @@ public class RobotContainer extends Robot{
     private void configureButtonBindings()
     {
         buttonBinders.add(new SKSwerveBinder(m_swerveContainer));
+        buttonBinders.add(new SKVisionBinder(m_visionContainer, m_swerveContainer));
         // Traversing through all the binding classes to actually bind the buttons
         for (CommandBinder subsystemGroup : buttonBinders)
         {
