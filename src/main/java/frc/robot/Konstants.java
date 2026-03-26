@@ -164,6 +164,14 @@ public final class Konstants
             12, false);
     }
 
+    public static final class DrumLauncher
+    {
+
+        public static final Translation2d kHubTranslation =
+            new Translation2d(0.0, 0.0); // TODO: set actual hub coordinates
+
+    }
+
     // ==================== Fuel Hunt Tuning ====================
     // ▼▼▼  CHANGE THESE TO ADJUST FUEL HUNT BEHAVIOUR  ▼▼▼
     //
