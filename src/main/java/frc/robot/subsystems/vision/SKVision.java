@@ -1,5 +1,9 @@
 package frc.robot.subsystems.vision;
 
+import static edu.wpi.first.units.Units.Meters;
+import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.Radians;
+import static edu.wpi.first.units.Units.RadiansPerSecond;
 import static frc.robot.Konstants.VisionConstants.kAprilTagFieldLayout;
 import static frc.robot.Konstants.VisionConstants.kAprilTagPipeline;
 
@@ -7,19 +11,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.littletonrobotics.junction.AutoLogOutput;
+import org.littletonrobotics.junction.Logger;
+
 import com.pathplanner.lib.config.PIDConstants;
 
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.Vector;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.networktables.StructArrayPublisher;
-import edu.wpi.first.util.sendable.SendableBuilder;
+import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.lib.utils.Field;
 import frc.lib.utils.Trio;
@@ -35,18 +41,23 @@ public class SKVision extends SubsystemBase {
 
     // Declare your limelights here and write their hostnames in a comment next to each limelight
     /* Example:
-    public final Limelight rightLL = new Limelight(VisionConfig.RIGHT_CONFIG); // right-limelight
+    public final Limelight rightLL = new Limelight(VisionConfig.RIGHT_CONFIG); // limelight-front
     */
+    public final Limelight backLL = new Limelight(VisionConfig.BACK_CONFIG); // limelight-front
+    public final Limelight turretLL = new Limelight(VisionConfig.TURRET_CONFIG); // limelight-turret
+    public final Limelight intakeLL = new Limelight(VisionConfig.INTAKE_CONFIG); // limelight-intake
     
     // Array of all limelights
-    public final Limelight[] allLimelights = {}; 
+    public final Limelight[] allLimelights = {turretLL}; 
     // Limelights for pose estimation; order them from most used with best view to least used with worst view
-    public final Limelight[] poseLimelights = {}; 
+    public final Limelight[] poseLimelights = {turretLL}; 
     
+    
+    private Pose3d[] emptyPose3dArray = new Pose3d[0];
     public List<Integer> tagIDsInView = new ArrayList<Integer>();
     public List<Pose3d> tagLOSTransforms = new ArrayList<Pose3d>();
-    private StructArrayPublisher<Pose3d> tagLOSPublisher = NetworkTableInstance.getDefault()
-            .getStructArrayTopic("VisibleTargetPoses", Pose3d.struct).publish();
+    // private StructArrayPublisher<Pose3d> tagLOSPublisher = NetworkTableInstance.getDefault()
+    //         .getStructArrayTopic("VisibleTargetPoses", Pose3d.struct).publish();
 
     // Boolean stating whether or not limelight poses are being integrated with actual
     public boolean isIntegrating = false; 
@@ -54,13 +65,33 @@ public class SKVision extends SubsystemBase {
     // Provides a boolean as to whether or not the Limelights are "driving" the robot with their measurements
     public boolean isDriving = false; 
 
-    // Creates an ArrayList to store estimated vision poses during autonomous 
+    // Creates an ArrayList to store estimated vision poses during autonomous
     public ArrayList<Trio<Pose3d, Pose2d, Double>> multiCamPoses = new ArrayList<Trio<Pose3d, Pose2d, Double>>();
 
+    StructPublisher<Pose3d> turretLimelightPosePublisher = NetworkTableInstance.getDefault().getStructTopic("TurretLLPose", Pose3d.struct).publish();
+    
+    
+        // Data extraction record (groups related vision measurement data)
+        // Package-private for testing
+        record VisionMeasurement(
+            double timeStamp,
+            double targetSize,
+            Pose3d botpose3D,
+            Pose2d botposeMT1,
+            Pose2d botposeMT2,
+            RawFiducial[] tags,
+            boolean multiTags,
+            ChassisSpeeds robotSpeed,
+            double poseDifference,
+            double highestAmbiguity
+        ) {}
+    
     public SKVision(Optional<SKSwerve> m_swerve) {
-        this.m_swerve = m_swerve.get();
-
+        this.m_swerve = m_swerve.orElseThrow(
+            () -> new IllegalArgumentException("SKSwerve is required for SKVision")
+        );
         startupLimelights();
+        turretLL.setIMUMode(IMUMode.EXTERNAL_ONLY);
     }
 
     @Override
@@ -68,39 +99,40 @@ public class SKVision extends SubsystemBase {
         tagIDsInView.clear();
         tagLOSTransforms.clear();
 
+        Rotation2d cachedSwerveRotation = m_swerve.getRawDrivetrainRotation();
+
         for(Limelight ll : poseLimelights) {
-            ll.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
+            ll.setRobotOrientation(cachedSwerveRotation.getDegrees());
             scanForTags(ll);
         }
 
-        SmartDashboard.putData("Vision", this);
         telemeterizeTagLOS();
+        
+        addStdDevsToLogger();
+        addLimelightsToLogger();
 
         /* The secret sauce: */
         estimatePose();
     }
 
-    @Override
-    public void initSendable(SendableBuilder builder) {
-        builder.addBooleanProperty(
-            "Vision Driving", 
-            () -> isDriving, 
-            null);
-        builder.addStringProperty(
-            "ResetPoseToVision Status", 
-            () -> resetPoseToVisionLog, 
-            null);
-        
-        addLimelightsToBuilder(builder);
+    private void addLimelightsToLogger() {
+        for(Limelight ll : allLimelights) {
+            Logger.recordOutput(
+                "Vision/" + ll.getName() + " Status", 
+                ll.getLogStatus());
+        }
     }
 
-    private void addLimelightsToBuilder(SendableBuilder builder) {
-        for(Limelight ll : allLimelights) {
-            builder.addStringProperty(
-                ll.getName() + " Status", 
-                () -> ll.getLogStatus(), 
-                null);
-        }
+    private void addStdDevsToLogger() {
+        Logger.recordOutput(
+            "Vision/StdDevs/X", 
+            VisionConfig.VISION_STD_DEV_X);
+        Logger.recordOutput(
+            "Vision/StdDevs/Y", 
+            VisionConfig.VISION_STD_DEV_Y);
+        Logger.recordOutput(
+            "Vision/StdDevs/Theta", 
+            VisionConfig.VISION_STD_DEV_THETA);
     }
 
     private void startupLimelights() {
@@ -111,7 +143,8 @@ public class SKVision extends SubsystemBase {
             else {
                 //ll.setLogStatus("Idle");
             }
-            ll.setIMUMode(IMUMode.EXTERNAL); // For Limelight 4s only; this makes sure that we're only using the external IMU for Megatag 2
+            ll.setIMUMode(IMUMode.INTERNAL_EXTERNAL_ASSIST); // For Limelight 4s only; this fuses the internal IMU with the external IMU to provide more accurate pose estimation and better performance
+            ll.setIMUAssistAlpha(0.001); // Sets the alpha value for IMU assist mode
             ll.setLEDMode(false); // Turns off LED lights on startup
         }
     }
@@ -133,7 +166,8 @@ public class SKVision extends SubsystemBase {
     /**
      * Sends the poses of all visible tags to NetworkTables for logging and telemetry purposes.
      */
-    private void telemeterizeTagLOS() {
+    @AutoLogOutput(key = "Vision/VisibleTagPoses")
+    private Pose3d[] telemeterizeTagLOS() {
         for(int id : tagIDsInView) {
             kAprilTagFieldLayout.getTagPose(id).ifPresent(targetPose -> {
                 tagLOSTransforms.add(
@@ -142,7 +176,7 @@ public class SKVision extends SubsystemBase {
             });
         }
 
-        tagLOSPublisher.set(tagLOSTransforms.toArray(Pose3d[]::new));
+        return tagLOSTransforms.toArray(emptyPose3dArray);
     }
 
     /**
@@ -152,13 +186,14 @@ public class SKVision extends SubsystemBase {
      * and then pass the current camera into the method.
      * @param ll The camera to estimate the robot pose with
      */
+    @SuppressWarnings("unused")
     private void updatePoseMultiCam(Limelight ll) {
         // Sets the robot's yaw for use with MEGATAG2 right before integrating with estimator
         ll.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
 
         Pose3d botPose3d = ll.getRawPose3d(); // Gets the 3D pose of the limelight on the robot using the position offsets
         Pose2d megaPose2d = ll.getMegaPose2d(); // Gets the estimated pose of the robot using MegaTag2 objects
-        double timestamp = ll.getRawPoseTimestamp(); // Timestamp of when the pose was collected
+        double timestamp = ll.getMegaPoseTimestamp(); // Timestamp of when the pose was collected
 
         Pose2d estimatedRobotPose = // Uses limelight (effectively swerve) rotation value instead of estimated rotation value
             new Pose2d(megaPose2d.getTranslation(), megaPose2d.getRotation()); 
@@ -184,8 +219,9 @@ public class SKVision extends SubsystemBase {
             // Set the integrating status to false before checking if any limelight is integrating
             isIntegrating = false;
 
-            // Feeds the limelight's robot orientation for use with the MEGATAG2 algorithm
-            ll.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
+            // Commented out because this should be handled in periodic
+            // // Feeds the limelight's robot orientation for use with the MEGATAG2 algorithm
+            // ll.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
 
             // Add the input into the pose estimator
             addFilteredLimelightInput(ll);
@@ -198,19 +234,21 @@ public class SKVision extends SubsystemBase {
         }
     }
 
-    private void updatePoseTeleop() {
-        if (!DriverStation.isTeleopEnabled()) {
-            return;
-        }
-
+    private void updatePose() {
         Limelight bestLL = getBestLimelight();
         for(Limelight ll : poseLimelights) {
-            if (ll.getName() != bestLL.getName()) {
+            if(!DriverStation.isDisabled()) {
+                ll.setThrottle(10);
+            }
+            else {
+                ll.setThrottle(0);
+            }
+            if (!ll.getName().equals(bestLL.getName())) {
                 ll.sendInvalidStatus("Rejected: Not best Limelight");
             }
         }
 
-        updatePoseSingleCam(bestLL);    
+        updatePoseSingleCam(bestLL);
     }
 
     public void estimatePose() {
@@ -224,14 +262,14 @@ public class SKVision extends SubsystemBase {
         updatePoseAutonomous();
 
         /*
-        Teleop pose updater:
+        Teleop/disabled pose updater:
 
         Instead of allowing all limelights to feed data into the SwervePoseEstimator, it scores each limelight that has a
         tag in view based on the tag's proximity to the bot and the number of tags seen. Only then does it feed a pose measurement 
         into the pose estimator. The pose can still be rejected for being too erroneous, but scoring each camera significantly
         reduces the chances of a pose estimate being rejected.
         */
-        updatePoseTeleop();
+        updatePose();
     }
 
     public Limelight getBestLimelight() {
@@ -239,8 +277,8 @@ public class SKVision extends SubsystemBase {
         double bestScore = 0;
         for(Limelight LL : poseLimelights) {
             double score = 0;
-            score += LL.getTagCountInView() * 100;
-            score += LL.getTargetSize(); // Range: 1-100
+            score += (LL.getTagCountInView() * VisionConfig.Thresholds.TAG_COUNT_WEIGHT) / LL.getDistanceToTagFromCamera();
+            score += LL.getTargetSize() * 1.25; // Range: 1-100
 
             if(score > bestScore) {
                 bestScore = score;
@@ -263,21 +301,19 @@ public class SKVision extends SubsystemBase {
             return;
         }
 
+        resetPoseToVisionLog = "ForceReset executed on " + ll.getName();
         m_swerve.resetPose(ll.getRawPose3d().toPose2d());
-        ll.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
-        //TODO: if MT2 doesn't work, change it to the line below
-        // m_swerve.resetPose(ll.getRawPose3d().toPose2d());
-        // m_swerve.resetPose(ll.getMegaPose2d());
     }
 
     public void autonResetPoseToVision() {
         boolean reject = true;
         boolean firstSuccess = false;
-        double batchSize = 5;
+        int batchSize = 5;
+        int endIndex = Math.max(0, multiCamPoses.size() - batchSize);
         /* Starting at the most recent auton pose estimation, analyze the next [batchSize]
         poses and see if they can be succesfully added to the robot's pose estimator
         */ 
-        for (int i = multiCamPoses.size() - 1; i > (multiCamPoses.size() - batchSize) - 1; i--) {
+        for (int i = multiCamPoses.size() - 1; i > endIndex - 1; i--) {
             Trio<Pose3d, Pose2d, Double> poseInfo = multiCamPoses.get(i);
             boolean success =
                     resetPoseToVision(
@@ -317,11 +353,12 @@ public class SKVision extends SubsystemBase {
         }
 
         Pose3d botPose3d = ll.getRawPose3d();
-        ll.setRobotOrientation(botPose3d.toPose2d().getRotation().getDegrees());
+        // ll.setRobotOrientation(botPose3d.toPose2d().getRotation().getDegrees());
         resetPoseToVision(
                 ll.targetInView(), botPose3d, ll.getMegaPose2d(), ll.getRawPoseTimestamp());
     }
 
+    @AutoLogOutput(key = "Vision/ResetPoseToVisionLog")
     private String resetPoseToVisionLog = "Not executed yet..."; // Provides an updatable string for smartdashboard
     /**
      * Set robot pose to vision pose only if LL has good tag reading
@@ -332,12 +369,10 @@ public class SKVision extends SubsystemBase {
         boolean targetInView, Pose3d botpose3D, Pose2d megaPose, double poseTimestamp) {
         boolean reject = false;
         if (targetInView) {
-            Pose2d botpose = botpose3D.toPose2d();
-            // Pose2d robotPose = m_swerve.getRobotPose(); // TODO: Add telemetry for pose before and after integrating vision
             if (Field.poseOutOfField(megaPose)
-                    || Math.abs(botpose3D.getZ()) > 0.25 // Robot pose is floating
-                    || (Math.abs(botpose3D.getRotation().getX()) > 5
-                            || Math.abs(botpose3D.getRotation().getY()) > 5)) {     
+                    || Math.abs(botpose3D.getZ()) > VisionConfig.Thresholds.MAX_HEIGHT.in(Meters)
+                    || (Math.abs(botpose3D.getRotation().getX()) > VisionConfig.Thresholds.MAX_TILT.in(Radians)
+                            || Math.abs(botpose3D.getRotation().getY()) > VisionConfig.Thresholds.MAX_TILT.in(Radians))) {
                 resetPoseToVisionLog = (
                         "ResetPoseToVision: FAIL || BAD POSE");
                 reject = true;
@@ -346,12 +381,12 @@ public class SKVision extends SubsystemBase {
                 resetPoseToVisionLog = (
                         "ResetPoseToVision: FAIL || OUT OF FIELD");
                 reject = true;
-            } else if (Math.abs(botpose3D.getZ()) > 0.25) {
+            } else if (Math.abs(botpose3D.getZ()) > VisionConfig.Thresholds.MAX_HEIGHT.in(Meters)) {
                 resetPoseToVisionLog = (
                         "ResetPoseToVision: FAIL || IN AIR");
                 reject = true;
-            } else if ((Math.abs(botpose3D.getRotation().getX()) > 5
-                    || Math.abs(botpose3D.getRotation().getY()) > 5)) {
+            } else if ((Math.abs(botpose3D.getRotation().getX()) > VisionConfig.Thresholds.MAX_TILT.in(Radians)
+                    || Math.abs(botpose3D.getRotation().getY()) > VisionConfig.Thresholds.MAX_TILT.in(Radians))) {
                         resetPoseToVisionLog = (
                         "ResetPoseToVision: FAIL || TILTED");
                 reject = true;
@@ -362,18 +397,19 @@ public class SKVision extends SubsystemBase {
                 return !reject; // return the success status
             }
 
-            // track STDs
-            VisionConfig.VISION_STD_DEV_X = 0.001;
-            VisionConfig.VISION_STD_DEV_Y = 0.001;
-            VisionConfig.VISION_STD_DEV_THETA = 0.001;
-            m_swerve.getDrivetrain().setVisionMeasurementStdDevs(
+            // track STDs - use reset values for forced pose updates
+            VisionConfig.VISION_STD_DEV_X = VisionConfig.PoseStdDevs.RESET.xy();
+            VisionConfig.VISION_STD_DEV_Y = VisionConfig.PoseStdDevs.RESET.xy();
+            VisionConfig.VISION_STD_DEV_THETA = VisionConfig.PoseStdDevs.RESET.theta();
+            m_swerve.setVisionMeasurementStdDevs(
                     VecBuilder.fill(
                             VisionConfig.VISION_STD_DEV_X,
                             VisionConfig.VISION_STD_DEV_Y,
                             VisionConfig.VISION_STD_DEV_THETA));
 
             Pose2d integratedPose = new Pose2d(megaPose.getTranslation(), megaPose.getRotation());
-            m_swerve.getDrivetrain().addVisionMeasurement(integratedPose, poseTimestamp);
+            // m_swerve.getDrivetrain().addVisionMeasurement(integratedPose, poseTimestamp);
+            m_swerve.addVisionMeasurement(integratedPose, poseTimestamp);
             // robotPose = m_swerve.getRobotPose(); // get updated pose
             resetPoseToVisionLog = ("ResetPoseToVision: SUCCESS");
             return true;
@@ -381,155 +417,226 @@ public class SKVision extends SubsystemBase {
         return false; // target not in view
     }
 
-    private void addFilteredLimelightInput(Limelight LL) {
-        double xyStds = 1000;
-        double degStds = 1000;
-
-        // integrate vision
+    /**
+     * Validates basic requirements for vision measurement integration.
+     * @param LL The limelight to validate
+     * @return true if basic requirements are met, false otherwise
+     */
+    private boolean validateBasicRequirements(Limelight LL) {
         if (!LL.targetInView()) {
             LL.setTagStatus("no tags");
             LL.sendInvalidStatus("no tag found rejection");
-            return;
+            return false;
         }
+        // LL.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
+        return true;
+    }
 
-        LL.setRobotOrientation(m_swerve.getRobotRotation().getDegrees());
-        boolean multiTags = LL.multipleTagsInView();
-        double timeStamp = LL.getRawPoseTimestamp();
-        double targetSize = LL.getTargetSize();
-        Pose3d botpose3DMT1 = LL.getRawPose3d();
-        Pose2d botposeMT1 = botpose3DMT1.toPose2d();
-        Pose2d botposeMT2 = LL.getMegaPose2d();
-        RawFiducial[] tags = LL.getRawFiducial();
-        double highestAmbiguity = 2;
-        ChassisSpeeds robotSpeed = m_swerve.getRobotRelativeSpeeds();
-
-        // distance from current pose to vision estimated pose
-        double poseDifference =
-                m_swerve.getRobotPose().getTranslation().getDistance(botposeMT2.getTranslation());
-
-        /* rejections */
-
-        // reject pose if individual tag ambiguity is too high
+    /**
+     * Finds the highest ambiguity among all visible tags.
+     * Package-private for testing.
+     * @param tags Array of raw fiducial tags
+     * @param LL Limelight for logging tag statuses
+     * @return The highest ambiguity value, or -1 if no tags
+     */
+    double findHighestAmbiguity(RawFiducial[] tags, Limelight LL) {
+        double highestAmbiguity = -1; // Fixed initialization (was 2)
         LL.setTagStatus("");
         for (RawFiducial tag : tags) {
-            // search for highest ambiguity tag for later checks
-            if (highestAmbiguity == 2) {
-                highestAmbiguity = tag.ambiguity;
-            } else if (tag.ambiguity > highestAmbiguity) {
+            if (tag.ambiguity > highestAmbiguity) {
                 highestAmbiguity = tag.ambiguity;
             }
-            // log ambiguities
             LL.setTagStatus(LL.getTagStatus() + "Tag " + tag.id + ": " + tag.ambiguity);
-            // ambiguity rejection check
-            if (tag.ambiguity > 0.9) {
-                LL.sendInvalidStatus("ambiguity rejection");
-                return;
-            }
         }
-        if (Field.poseOutOfField(botposeMT2)) {
-            // reject if pose is out of the field
+        return highestAmbiguity;
+    }
+
+    /**
+     * Extracts vision measurement data from a limelight.
+     * @param LL The limelight to extract data from
+     * @return VisionMeasurement record containing all relevant data
+     */
+    private VisionMeasurement extractVisionMeasurement(Limelight LL) {
+        double timeStamp = LL.getRawPoseTimestamp();
+        double targetSize = LL.getTargetSize();
+        Pose3d botpose3D = LL.getRawPose3d();
+        Pose2d botposeMT1 = botpose3D.toPose2d();
+        Pose2d botposeMT2 = LL.getMegaPose2d();
+        RawFiducial[] tags = LL.getRawFiducial();
+        boolean multiTags = LL.multipleTagsInView();
+        ChassisSpeeds robotSpeed = m_swerve.getRobotRelativeSpeeds();
+        double poseDifference = m_swerve.getRobotPose().getTranslation().getDistance(botposeMT2.getTranslation());
+        double highestAmbiguity = findHighestAmbiguity(tags, LL);
+
+        return new VisionMeasurement(timeStamp, targetSize, botpose3D, botposeMT1, botposeMT2,
+                                     tags, multiTags, robotSpeed, poseDifference, highestAmbiguity);
+    }
+
+    /**
+     * Checks if a vision measurement should be rejected based on quality thresholds.
+     * Package-private for testing.
+     * @param m The vision measurement to check
+     * @param LL Limelight for logging rejection reasons
+     * @return true if the measurement should be rejected, false otherwise
+     */
+    boolean shouldRejectPose(VisionMeasurement m, Limelight LL) {
+        if (m.highestAmbiguity() > VisionConfig.Thresholds.MAX_AMBIGUITY) {
+            LL.sendInvalidStatus("ambiguity rejection");
+            return true;
+        }
+        if (Field.poseOutOfField(m.botposeMT2())) {
             LL.sendInvalidStatus("bound rejection - pose OOB");
-            return;
-        } else if (Math.abs(robotSpeed.omegaRadiansPerSecond) >= 4 * Math.PI) {
-            // reject if we are rotating more than 0.5 rad/s
+            return true;
+        }
+        if (Math.abs(m.robotSpeed().omegaRadiansPerSecond) >= VisionConfig.Thresholds.MAX_ROTATION_SPEED.in(RadiansPerSecond)) {
             LL.sendInvalidStatus("rot speed rejection - too fast");
-            return;
-        } else if (Math.abs(botpose3DMT1.getZ()) > 0.25) {
-            // reject if pose is .25 meters in the air
+            return true;
+        }
+        if (Math.abs(m.botpose3D().getZ()) > VisionConfig.Thresholds.MAX_HEIGHT.in(Meters)) {
             LL.sendInvalidStatus("height rejection - in air");
-            return;
-        } else if (Math.abs(botpose3DMT1.getRotation().getX()) > 5
-                || Math.abs(botpose3DMT1.getRotation().getY()) > 5) {
-            // reject if pose is 5 degrees titled in roll or pitch
+            return true;
+        }
+        if (Math.abs(m.botpose3D().getRotation().getX()) > VisionConfig.Thresholds.MAX_TILT.in(Radians)
+                || Math.abs(m.botpose3D().getRotation().getY()) > VisionConfig.Thresholds.MAX_TILT.in(Radians)) {
             LL.sendInvalidStatus("roll/pitch rejection - tilted");
-            return;
-        } else if (targetSize <= 0.025) {
+            return true;
+        }
+        if (m.targetSize() <= VisionConfig.Thresholds.MIN_SIZE) {
             LL.sendInvalidStatus("size rejection - target too small");
-            return;
+            return true;
         }
-        /* integrations */
+        return false;
+    }
 
-        // if almost stationary and extremely close to tag
-        else if (robotSpeed.vxMetersPerSecond + robotSpeed.vyMetersPerSecond <= 0.2
-                && targetSize > 0.4) {
-            LL.sendValidStatus("Stationary close integration");
-            xyStds = 0.1;
-            degStds = 0.1;
-        } 
-        // If multiple tags detected
-        else if (multiTags && targetSize > 0.05) {
-            LL.sendValidStatus("Multi integration");
-            xyStds = 0.25;
-            degStds = 8;
-            if (targetSize > 0.09) { // If larger tag size
-                LL.sendValidStatus("Strong Multi integration");
-                xyStds = 0.1;
-                degStds = 0.1;
+    /**
+     * Determines the appropriate standard deviations for vision measurement integration
+     * based on robot state and vision measurement quality.
+     * Package-private for testing.
+     *
+     * @param robotSpeed Current robot chassis speeds
+     * @param targetSize Size of the visible target (0-1 range)
+     * @param multiTags Whether multiple tags are visible
+     * @param highestAmbiguity Highest ambiguity of visible tags
+     * @param poseDifference Distance between current pose and vision pose
+     * @param ll Limelight to send status messages
+     * @return PoseStdDevs with xy and theta standard deviations, or null to reject
+     */
+    VisionConfig.PoseStdDevs calculateIntegrationStdDevs(
+        ChassisSpeeds robotSpeed,
+        double targetSize,
+        boolean multiTags,
+        double highestAmbiguity,
+        double poseDifference,
+        Limelight ll
+    ) {
+        // Stationary and very close
+        if (Math.hypot(robotSpeed.vxMetersPerSecond, robotSpeed.vyMetersPerSecond) <= VisionConfig.Thresholds.STATIONARY_SPEED.in(MetersPerSecond)
+                && targetSize > VisionConfig.Thresholds.VERY_CLOSE_SIZE && poseDifference < VisionConfig.Thresholds.CLOSE_POSE_DIFF) {
+            ll.sendValidStatus("Stationary close integration");
+            return VisionConfig.PoseStdDevs.STATIONARY_CLOSE;
+        }
+
+        // Multi-tag integration
+        else if (multiTags && targetSize > VisionConfig.Thresholds.SMALL_MULTI_SIZE && poseDifference < VisionConfig.Thresholds.MULTI_POSE_DIFF) {
+            if (targetSize > VisionConfig.Thresholds.LARGE_MULTI_SIZE) {
+                ll.sendValidStatus("Strong Multi integration");
+                return VisionConfig.PoseStdDevs.STRONG_MULTI;
             }
+            ll.sendValidStatus("Multi integration");
+            return VisionConfig.PoseStdDevs.MULTI_TAG;
         }
-        // If tag is very close, loosen up pose strictness
-        else if (targetSize > 0.8 && poseDifference < 0.5) {
-            LL.sendValidStatus("Close integration");
-            xyStds = 0.5;
-            degStds = 16;
-        } 
-        // If tag is moderately close but pose difference is small
-        else if (targetSize > 0.1 && poseDifference < 0.3) {
-            LL.sendValidStatus("Proximity integration");
-            xyStds = 2.0;
-            degStds = 999999;
-        } 
-        // If inaccuracy (ambiguity) is low and target size is ok
-        else if (highestAmbiguity < 0.25 && targetSize >= 0.03) {
-            LL.sendValidStatus("Stable integration");
-            xyStds = 0.5;
-            degStds = 999999;
-        } 
+
+        // Close single tag
+        else if (targetSize > VisionConfig.Thresholds.CLOSE_SIZE && poseDifference < VisionConfig.Thresholds.CLOSE_POSE_DIFF) {
+            ll.sendValidStatus("Close integration");
+            return VisionConfig.PoseStdDevs.CLOSE_SINGLE;
+        }
+
+        // Proximity integration
+        else if (targetSize > VisionConfig.Thresholds.MODERATE_SIZE && poseDifference < VisionConfig.Thresholds.PROXIMITY_POSE_DIFF) {
+            ll.sendValidStatus("Proximity integration");
+            return VisionConfig.PoseStdDevs.PROXIMITY;
+        }
+
+        // Stable integration (low ambiguity)
+        else if (highestAmbiguity < VisionConfig.Thresholds.LOW_AMBIGUITY && targetSize >= VisionConfig.Thresholds.STABLE_SIZE) {
+            ll.sendValidStatus("Stable integration");
+            return VisionConfig.PoseStdDevs.STABLE;
+        }
+
+        // Reject - none of the integration criteria met
         else {
-            LL.sendInvalidStatus(
-                    "catch rejection: "
-                            + poseDifference
-                            + " poseDiff");
-            return;
+            ll.sendInvalidStatus("catch rejection: " + poseDifference + " poseDiff");
+            return null;
+        }
+    }
+
+    /**
+     * Integrates a vision measurement with the pose estimator after applying penalties.
+     * @param m The vision measurement to integrate
+     * @param LL Limelight for logging
+     */
+    private void integrateVisionMeasurement(VisionMeasurement m, Limelight LL) {
+        VisionConfig.PoseStdDevs stdDevs = calculateIntegrationStdDevs(
+            m.robotSpeed(), m.targetSize(), m.multiTags(),
+            m.highestAmbiguity(), m.poseDifference(), LL
+        );
+
+        if (stdDevs == null) {
+            return; // Rejected by integration strategy
         }
 
-        // strict with degree std and ambiguity and rotation because this is megatag1
-        if (highestAmbiguity > 0.5) {
-            degStds = 15;
+        // Apply penalties
+        double xyStds = stdDevs.xy();
+        double degStds = stdDevs.theta();
+
+        if (m.highestAmbiguity() > VisionConfig.Thresholds.HIGH_AMBIGUITY) {
+            degStds = Math.min(degStds, VisionConfig.PoseStdDevs.HIGH_AMBIGUITY_PENALTY.theta());
         }
 
-        if (robotSpeed.omegaRadiansPerSecond >= 0.5) {
-            degStds = 15;
+        if (Math.abs(m.robotSpeed().omegaRadiansPerSecond) >= VisionConfig.Thresholds.HIGH_ROTATION_SPEED.in(RadiansPerSecond)) {
+            degStds = Math.min(degStds, VisionConfig.PoseStdDevs.HIGH_ROTATION_PENALTY.theta());
         }
 
-        // track STDs
+        Pose2d integratedPose = new Pose2d(m.botposeMT2().getTranslation(), m.botposeMT2().getRotation());
+
         VisionConfig.VISION_STD_DEV_X = xyStds;
         VisionConfig.VISION_STD_DEV_Y = xyStds;
         VisionConfig.VISION_STD_DEV_THETA = degStds;
 
-        Pose2d integratedPose = new Pose2d(botposeMT2.getTranslation(), botposeMT2.getRotation());
-
         addVisionMeasurementWithStdDevs(
-            integratedPose, 
-            timeStamp, 
-            VecBuilder.fill(
-                VisionConfig.VISION_STD_DEV_X,
-                VisionConfig.VISION_STD_DEV_Y,
-                VisionConfig.VISION_STD_DEV_THETA));
+            integratedPose,
+            m.timeStamp(),
+            VecBuilder.fill(xyStds, xyStds, degStds)
+        );
+    }
+
+    /**
+     * Main entry point for filtering and integrating a limelight measurement into the pose estimator.
+     * Validates the measurement, checks for rejection criteria, and integrates if acceptable.
+     * @param LL The limelight to process
+     */
+    private void addFilteredLimelightInput(Limelight LL) {
+        if (!validateBasicRequirements(LL)) {
+            return;
+        }
+
+        VisionMeasurement measurement = extractVisionMeasurement(LL);
+
+        if (shouldRejectPose(measurement, LL)) {
+            return;
+        }
+
+        integrateVisionMeasurement(measurement, LL);
     }
 
     private void addVisionMeasurementWithStdDevs(Pose2d integratedPose, double timeStamp, Vector<N3>stdDevs) {
-        m_swerve.getDrivetrain().setVisionMeasurementStdDevs(stdDevs);
+        // m_swerve.getDrivetrain().setVisionMeasurementStdDevs(stdDevs);
 
-        m_swerve.getDrivetrain().addVisionMeasurement(integratedPose, timeStamp);
-    }
-    private void addVisionMeasurementWithStdDevs(Pose2d integratedPose, double timeStamp, double stdDevX, double stdDevY, double stdDevTheta) {
-        Vector<N3> stdDevs = VecBuilder.fill(
-            stdDevX,
-            stdDevY,
-            stdDevTheta
-        );
-        addVisionMeasurementWithStdDevs(integratedPose, timeStamp, stdDevs);
+        // m_swerve.getDrivetrain().addVisionMeasurement(integratedPose, timeStamp);
+
+        m_swerve.setVisionMeasurementStdDevs(stdDevs);
+        m_swerve.addVisionMeasurement(integratedPose, timeStamp);
     }
 
     /** If at least one limelight has an accurate pose */

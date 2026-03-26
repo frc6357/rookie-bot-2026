@@ -1,16 +1,12 @@
 package frc.robot.subsystems.drive;
 
 import static frc.robot.Konstants.AutoConstants.pathConfig;
-import static frc.robot.Konstants.SwerveConstants.kChassisLength;
-import static frc.robot.Ports.DriverPorts.kTranslationXPort;
-import static frc.robot.Ports.DriverPorts.kTranslationYPort;
-import static frc.robot.Ports.DriverPorts.kVelocityOmegaPort;
 
-import java.util.List;
-import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
-import com.ctre.phoenix6.Utils;
+import org.littletonrobotics.junction.AutoLogOutput;
+import org.littletonrobotics.junction.Logger;
+
 import com.ctre.phoenix6.swerve.SwerveDrivetrain.SwerveDriveState;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.pathplanner.lib.auto.AutoBuilder;
@@ -19,59 +15,44 @@ import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.util.DriveFeedforwards;
 import com.pathplanner.lib.util.PathPlannerLogging;
 
-//import choreo.Choreo.TrajectoryLogger;
-//import choreo.auto.AutoFactory;
-//import choreo.trajectory.SwerveSample;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Transform2d;
-import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.networktables.StructArrayPublisher;
-import edu.wpi.first.networktables.StructPublisher;
-import edu.wpi.first.units.Units;
-import edu.wpi.first.util.sendable.SendableBuilder;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.lib.utils.Field;
-import frc.lib.utils.Util;
 import frc.robot.Konstants.DriveConstants;
 import frc.robot.Robot;
+import frc.lib.utils.Field;
+import frc.lib.utils.FieldConstants;
 
 /**
- * Class that extends the Phoenix 6 SwerveDrivetrain class and implements
- * Subsystem so it can easily be used in command-based projects.
+ * The Spring Konstant's swerve subsystem. This subsystem is responsible for controlling the swerve drivetrain, including
+ * applying swerve requests, estimating the robot's pose using a Kalman Filter, and interfacing with the 
+ * PathPlanner library for autonomous path following.
+ * <p>It features custom logging threads and timings in order to telemeterize important drivetrain information without impacting the main control loop. </p>
  */
-@SuppressWarnings("unused")
 public class SKSwerve extends SubsystemBase {
     private SwerveDriveState lastReadState;
     private final GeneratedDrivetrain drivetrain = GeneratedConstants.createDrivetrain();
     private SwerveDrivePoseEstimator poseEstimator;
-    private final GeneratedTelemetry telemetry = new GeneratedTelemetry(DriveConstants.kMaxSpeed.baseUnitMagnitude());
+    private final GeneratedTelemetry telemetry = new GeneratedTelemetry(DriveConstants.kMaxSpeed.baseUnitMagnitude(), Robot.isReal());
     private SwerveRequest currentRequest = DriveRequests.teleopRequest;
 
-    private Supplier<Double> translationXSupplier = () -> -kTranslationXPort.getFilteredAxis();
-    private Supplier<Double> translationYSupplier = () -> -kTranslationYPort.getFilteredAxis();
-    private Supplier<Double> velocityOmegaSupplier = () -> -kVelocityOmegaPort.getFilteredAxis();
-    
-    private Field2d elasticField = new Field2d();
-    
-    private StructPublisher<Pose2d> posePublisher = NetworkTableInstance.getDefault()
-    .getStructTopic("RobotPose", Pose2d.struct).publish();
-    
-    private StructArrayPublisher<Pose2d> pathPublisher = NetworkTableInstance.getDefault()
-    .getStructArrayTopic("ActivePath", Pose2d.struct).publish();
-    
+    private final DriveIO io;
+    // If this has an error, just build the project and it should go away.
+    private final DriveIOInputsAutoLogged inputs = new DriveIOInputsAutoLogged();
+
+    private Pose2d[] emptyPath = new Pose2d[0];
+
     public void setSwerveRequest(SwerveRequest request) {
         // Only allows PathPlanner to control the drivetrain during auto period through its own request
         if(DriverStation.isAutonomousEnabled() && !request.equals(DriveRequests.pathPlannerRequest)) {
@@ -88,7 +69,7 @@ public class SKSwerve extends SubsystemBase {
      * @return The command.
      */
     public Command followSwerveRequestCommand(
-        SwerveRequest.FieldCentric request, 
+        SwerveRequest.FieldCentric request,
         UnaryOperator<SwerveRequest.FieldCentric> updater) {
         return run(() -> setSwerveRequest(updater.apply(request)))
                 .handleInterrupt(() -> setSwerveRequest(new SwerveRequest.FieldCentric()));
@@ -103,194 +84,58 @@ public class SKSwerve extends SubsystemBase {
      * @return The command.
      */
     public Command followSwerveRequestCommand(
-        SwerveRequest.RobotCentric request, 
+        SwerveRequest.RobotCentric request,
         UnaryOperator<SwerveRequest.RobotCentric> updater) {
         return run(() -> setSwerveRequest(updater.apply(request)))
                 .handleInterrupt(() -> setSwerveRequest(new SwerveRequest.RobotCentric()));
     }
 
-    
+
     public SKSwerve() {
+        io = new DriveIOCTRE(drivetrain);
         lastReadState = drivetrain.getState();
-        
+
         setupPoseEstimator();
         configureAutoBuilder();
-        
-        PathPlannerLogging.setLogActivePathCallback((activePath) -> telemeterizeActivePath(activePath));
 
-        drivetrain.setDefaultCommand(drivetrain.applyRequest(()-> currentRequest));
+        PathPlannerLogging.setLogActivePathCallback((activePath) -> Logger.recordOutput("Drive/ActivePath", activePath.toArray(emptyPath)));
+
+        drivetrain.setDefaultCommand(drivetrain.applyRequest(()-> currentRequest).withName("DrivetrainRequestApplier"));
     }
 
     @Override
     public void periodic() {
-        poseEstimator.update(getGyroRotation(), drivetrain.getState().ModulePositions);
         lastReadState = drivetrain.getState();
-
-        SmartDashboard.putNumberArray(
-            "Drive/RawJoysticks", 
-            new double[] {
-                 translationXSupplier.get(),
-                translationYSupplier.get(),
-                velocityOmegaSupplier.get()          
-                });
+        poseEstimator.update(getGyroRotation(), lastReadState.ModulePositions);
 
         outputTelemetry();
 
-        SmartDashboard.putString("Active Path Name", PathPlannerAuto.currentPathName);
-    }
-
-    private void telemeterizeActivePath(List<Pose2d> path) {
-
-        pathPublisher.set(path.toArray(Pose2d[]::new));
+        Logger.recordOutput("PathPlanner/Active Path Name", PathPlannerAuto.currentPathName);
     }
 
     public void outputTelemetry() {
-		posePublisher.set(getRobotPose());
-		telemetry.telemeterize(lastReadState);
-		SmartDashboard.putData("Drive", this);
-		elasticField.setRobotPose(getRobotPose());
-		SmartDashboard.putData("Elastic Field 2D", elasticField);
+        Logger.runEveryN(4, () -> Logger.recordOutput("HubDistance", 
+            Field.isBlue() ? getRobotPose().getTranslation().getDistance(FieldConstants.Hub.topCenterPoint.toTranslation2d()) : 
+            getRobotPose().getTranslation().getDistance(FieldConstants.Hub.redTopCenterPoint.toTranslation2d())));
+        Logger.runEveryN(2, () -> telemetry.telemeterize(lastReadState));
+        Logger.runEveryN(2, () -> {
+            io.updateInputs(inputs); 
+            Logger.processInputs("Drive/DeviceInputs", inputs);
+        });
+		// m_field.setRobotPose(getRobotPose());
 	}
-
-    @Override
-	public void initSendable(SendableBuilder builder) {
-		builder.addDoubleProperty(
-				"Pitch Velocity Degrees Per Second",
-				() -> drivetrain
-						.getPigeon2()
-						.getAngularVelocityYDevice()
-						.getValue()
-						.in(Units.DegreesPerSecond),
-				null);
-		builder.addDoubleProperty(
-				"Pitch Degrees",
-				() -> drivetrain.getPigeon2().getPitch().getValue().in(Units.Degrees),
-				null);
-
-		builder.addDoubleProperty(
-				"Roll Velocity Degrees Per Second",
-				() -> drivetrain
-						.getPigeon2()
-						.getAngularVelocityXDevice()
-						.getValue()
-						.in(Units.DegreesPerSecond),
-				null);
-		builder.addDoubleProperty(
-				"Roll Degrees",
-				() -> drivetrain.getPigeon2().getRoll().getValue().in(Units.Degrees),
-				null);
-
-		addModuleToBuilder(builder, 0);
-		addModuleToBuilder(builder, 1);
-		addModuleToBuilder(builder, 2);
-		addModuleToBuilder(builder, 3);
-	}
-
-	private void addModuleToBuilder(SendableBuilder builder, int module) {
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Drive/Volts",
-				() -> drivetrain
-						.getModules()[module]
-						.getDriveMotor()
-						.getMotorVoltage()
-						.getValue()
-						.in(Units.Volts),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Rotation/Volts",
-				() -> drivetrain
-						.getModules()[module]
-						.getSteerMotor()
-						.getMotorVoltage()
-						.getValue()
-						.in(Units.Volts),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Drive/Stator Current",
-				() -> drivetrain
-						.getModules()[module]
-						.getDriveMotor()
-						.getStatorCurrent()
-						.getValue()
-						.in(Units.Amps),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Drive/Temperature Celsius",
-				() -> drivetrain
-						.getModules()[module]
-						.getDriveMotor()
-						.getDeviceTemp()
-						.getValue()
-						.in(Units.Celsius),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Rotation/Stator Current",
-				() -> drivetrain
-						.getModules()[module]
-						.getSteerMotor()
-						.getStatorCurrent()
-						.getValue()
-						.in(Units.Amps),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Drive/Supply Current",
-				() -> drivetrain
-						.getModules()[module]
-						.getDriveMotor()
-						.getSupplyCurrent()
-						.getValue()
-						.in(Units.Amps),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Rotation/Supply Current",
-				() -> drivetrain
-						.getModules()[module]
-						.getSteerMotor()
-						.getSupplyCurrent()
-						.getValue()
-						.in(Units.Amps),
-				null);
-
-		builder.addDoubleProperty(
-				"ModuleStates/" + module + "/Rotation/Temperature Celsius",
-				() -> drivetrain
-						.getModules()[module]
-						.getSteerMotor()
-						.getDeviceTemp()
-						.getValue()
-						.in(Units.Celsius),
-				null);
-	}
-
 
     public GeneratedDrivetrain getDrivetrain() {
         return drivetrain;
     }
 
     private void setupPoseEstimator() {
-        poseEstimator = 
+        poseEstimator =
             new SwerveDrivePoseEstimator(
-                drivetrain.getKinematics(), 
-                new Rotation2d(drivetrain.getPigeon2().getYaw().getValue()), 
-                drivetrain.getState().ModulePositions, 
+                drivetrain.getKinematics(),
+                new Rotation2d(drivetrain.getPigeon2().getYaw().getValue()),
+                drivetrain.getState().ModulePositions,
                 new Pose2d());
-    }
-
-    private void setupPoseEstimatorWithStdDevs(Matrix<N3, N1> odomStdDevs, Matrix<N3, N1> visionStdDevs) {
-        poseEstimator = 
-            new SwerveDrivePoseEstimator(
-                drivetrain.getKinematics(), 
-                new Rotation2d(drivetrain.getPigeon2().getYaw().getValue()), 
-                drivetrain.getState().ModulePositions, 
-                new Pose2d(),
-                odomStdDevs, 
-                visionStdDevs);
     }
 
     /**
@@ -337,13 +182,13 @@ public class SKSwerve extends SubsystemBase {
         double timestampSeconds,
         Matrix<N3, N1> visionMeasurementStdDevs
     ) {
-        poseEstimator.addVisionMeasurement(visionRobotPoseMeters, Utils.fpgaToCurrentTime(timestampSeconds), visionMeasurementStdDevs);
+        poseEstimator.addVisionMeasurement(visionRobotPoseMeters, timestampSeconds, visionMeasurementStdDevs);
     }
 
-    /* 
+    /*
      *
      * Autonomous
-     * 
+     *
      */
 
     private void configureAutoBuilder() {
@@ -393,36 +238,18 @@ public class SKSwerve extends SubsystemBase {
     //                 .withRotationalRate(speeds.omegaRadiansPerSecond)); // Drive counterclockwise with negative X (left)
     // }
 
-    /* 
+    /*
      *
-     * Odemetry Methods 
-     * 
+     * Odemetry Methods
+     *
      */
 
-    /** 
-     * Keep the robot on the field using the field length from Util by checking if the position is off 
-     * the field, then replacing it with the correct position
-     * @return The new pose after limiting out of field possibilities.
-     */
-    private Pose2d keepPoseOnField(Pose2d pose) {
-        double halfRobot = kChassisLength / 2;
-        double x = pose.getX();
-        double y = pose.getY();
-
-        double newX = Util.limit(x, halfRobot, Field.getFieldLength() - halfRobot);
-        double newY = Util.limit(y, halfRobot, Field.getFieldWidth() - halfRobot);
-
-        if (x != newX || y != newY) {
-            pose = new Pose2d(new Translation2d(newX, newY), pose.getRotation());
-            resetPose(pose);
-        }
-        return pose;
-    }
 
     /**
-     * 
+     *
      * @return The estimation of the robot's pose
      */
+    @AutoLogOutput(key = "Drive/EstimatedPose")
     public Pose2d getRobotPose() {
         return poseEstimator.getEstimatedPosition();
        // return pose;
@@ -434,6 +261,10 @@ public class SKSwerve extends SubsystemBase {
 
     public Rotation2d getRobotRotation() {
         return getRobotPose().getRotation();
+    }
+
+    public Rotation2d getRawDrivetrainRotation() {
+        return drivetrain.getState().Pose.getRotation();
     }
 
     public Rotation2d getGyroRotation() {
@@ -471,6 +302,7 @@ public class SKSwerve extends SubsystemBase {
 
     public void resetPose(Pose2d pose) {
         drivetrain.resetPose(pose);
+        // drivetrain.getPigeon2().set
         poseEstimator.resetPose(pose);
     }
 

@@ -1,23 +1,40 @@
 package frc.robot.bindings;
 
+import static frc.robot.Konstants.AutoConstants.kDefaultPathfindingConstraints;
+import static frc.robot.Konstants.AutoConstants.kTrenchPathfindingConstraints;
 import static frc.robot.Konstants.OIConstants.kJoystickDeadband;
-import static frc.robot.Ports.DriverPorts.kFastMode;
-import static frc.robot.Ports.DriverPorts.kResetGyroPos;
-import static frc.robot.Ports.DriverPorts.kRobotCentricMode;
-import static frc.robot.Ports.DriverPorts.kSlowMode;
-import static frc.robot.Ports.DriverPorts.kTranslationXPort;
-import static frc.robot.Ports.DriverPorts.kTranslationYPort;
-import static frc.robot.Ports.DriverPorts.kVelocityOmegaPort;
+import static frc.robot.Ports.DriverPorts.kLSbutton;
+import static frc.robot.Ports.DriverPorts.kRSbutton;
+import static frc.robot.Ports.DriverPorts.kRBbutton;
+import static frc.robot.Ports.DriverPorts.kLBbutton;
+import static frc.robot.Ports.DriverPorts.kLeftStickY;
+import static frc.robot.Ports.DriverPorts.kLeftStickX;
+import static frc.robot.Ports.DriverPorts.kRightStickX;
+import static frc.robot.Ports.DriverPorts.kLTrigger;
 
 import java.util.Optional;
+import java.util.Set;
 
+import com.pathplanner.lib.commands.PathfindThenFollowPath;
+
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
+import frc.lib.auto.Pathfinder;
+import frc.lib.bindings.CommandBinder;
 import frc.lib.preferences.Pref;
 import frc.lib.preferences.SKPreferences;
+import frc.lib.utils.filters.LinearDeadbandFilter;
+import frc.lib.utils.Field;
 import frc.lib.utils.filters.DriveStickFilter;
 import frc.robot.subsystems.drive.DriveRequests;
 import frc.robot.subsystems.drive.SKSwerve;
+import frc.robot.subsystems.drive.SKTargetPoint;
+import frc.robot.RobotContainer;
+import frc.robot.Ports.DriverPorts;
+
 
 @SuppressWarnings("unused")
 public class SKSwerveBinder implements CommandBinder{
@@ -42,10 +59,10 @@ public class SKSwerveBinder implements CommandBinder{
                 });
 
     //Driver buttons
-    private final Trigger robotCentric = kRobotCentricMode.button;
-    private final Trigger slowmode = kSlowMode.button;
-    private final Trigger resetButton = kResetGyroPos.button;
-    private final Trigger fastmode = kFastMode.button;
+    private final Trigger robotCentric = kRBbutton.button;
+    private final Trigger slowmode = kLBbutton.button;
+    private final Trigger resetButton = kRSbutton.button;
+    private final Trigger fastmode = kLSbutton.button;
 
 
     public SKSwerveBinder(Optional<SKSwerve> m_drive) {
@@ -72,22 +89,21 @@ public class SKSwerveBinder implements CommandBinder{
 
         SKSwerve drive = m_drive.get();
 
-        // TODO: Might need to uncomment this later? It caused a weird issue that made the robot drift like it's in space.
         // Sets filters for driving axes
-        // kTranslationXPort.setFilter(translationXFilter);
-        // kTranslationYPort.setFilter(translationYFilter);
-        // kVelocityOmegaPort.setFilter(rotationFilter);
+        kLeftStickY.setFilter(translationXFilter);
+        kLeftStickX.setFilter(translationYFilter);
+        kRightStickX.setFilter(rotationFilter);
 
-        // robotCentric.whileTrue(
-        //     drive.followSwerveRequestCommand(
-        //         DriveRequests.robotCentricTeleopRequest, 
-        //         DriveRequests.getRobotCentricTeleopRequestUpdater(
-        //                 () -> -kTranslationXPort.getFilteredAxis(), 
-        //                 () -> -kTranslationYPort.getFilteredAxis(), 
-        //                 () -> -kVelocityOmegaPort.getFilteredAxis(), 
-        //                 () -> slowmode.getAsBoolean(), 
-        //                 () -> fastmode.getAsBoolean())
-        // ));
+        robotCentric.whileTrue(
+            drive.followSwerveRequestCommand(
+                DriveRequests.robotCentricTeleopRequest, 
+                DriveRequests.getRobotCentricTeleopRequestUpdater(
+                        () -> -kLeftStickY.getFilteredAxis(), 
+                        () -> -kLeftStickX.getFilteredAxis(), 
+                        () -> -kRightStickX.getFilteredAxis(), 
+                        () -> slowmode.getAsBoolean(), 
+                        () -> fastmode.getAsBoolean())).withName("SwerveRobotCentricDrive")
+        );
         
         // Resets gyro angles / robot oreintation
         resetButton.onTrue(new InstantCommand(() -> {drive.resetOrientation();} ));
@@ -96,12 +112,12 @@ public class SKSwerveBinder implements CommandBinder{
             drive.followSwerveRequestCommand(
                 DriveRequests.teleopRequest, 
                 DriveRequests.getTeleopRequestUpdater(
-                        () -> -kTranslationXPort.getFilteredAxis(), 
-                        () -> -kTranslationYPort.getFilteredAxis(), 
-                        () -> -kVelocityOmegaPort.getFilteredAxis(), 
+                        () -> -kLeftStickY.getFilteredAxis(), 
+                        () -> -kLeftStickX.getFilteredAxis(), 
+                        () -> -kRightStickX.getFilteredAxis(), 
                         () -> slowmode.getAsBoolean(), 
                         () -> fastmode.getAsBoolean())
-            )
+            ).withName("SwerveTeleopDrive")
         );
     }
 }
