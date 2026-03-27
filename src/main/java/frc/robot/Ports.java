@@ -182,6 +182,14 @@ public class Ports
         //public static final CANPort kIndexerMotor = new CANPort(59, busName);
     }
 
+    public static class IntakePorts {
+        private static final String busName = "";
+
+        //Intake Motor IDs
+        public static final CANPort kIntakeRollerMotor = new CANPort(30, busName);
+        public static final CANPort kIntakePivotMotor = new CANPort(31, busName);
+    }
+
     public static class Sensors {
         private static final String busName = "";
         // public static final CANPort kCANrange = new CANPort(61, busName);
