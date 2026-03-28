@@ -1,13 +1,16 @@
 package frc.robot.subsystems.Intake;
 
 import static frc.robot.Ports.IntakePorts.kIntakePivotMotor;
+
+import org.littletonrobotics.junction.Logger;
+
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotP;
-import static frc.robot.Konstants.IntakeConstants.kIntakePivotPushVoltage;
+import static frc.robot.Konstants.IntakeConstants.kIntakePivotVoltage;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotI;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotD;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotF;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotS;
-import static frc.robot.Konstants.IntakeConstants.kIntakePivotOffset;
+import static frc.robot.Konstants.IntakeConstants.kIntakePivotGearRatio;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotUpAngle;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotDownAngle;
 import static frc.robot.Konstants.IntakeConstants.kIntakePivotAngleTolerance;
@@ -24,6 +27,7 @@ import com.revrobotics.spark.config.SparkFlexConfig;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import lombok.Getter;
+import lombok.Setter;
 
 public class SKIntakePivot extends SubsystemBase {
 
@@ -32,13 +36,17 @@ public class SKIntakePivot extends SubsystemBase {
     RelativeEncoder encoder = intakePivotMotor.getEncoder();
 
     @Getter
-    double targetVoltage;
+    private double targetVoltage;
 
     @Getter
-    double targetIntakePivotAngle = kIntakePivotUpAngle;
+    private double targetIntakePivotAngle = kIntakePivotUpAngle;
 
     @Getter
-    boolean isDeployed = false;
+    private boolean isDeployed = false;
+
+    @Getter
+    @Setter
+    private double intakePivotOffset = 0.0;
 
     SKIntakePivot() {
 
@@ -53,41 +61,63 @@ public class SKIntakePivot extends SubsystemBase {
     }
 
     public void deployIntake() {
-        controller.setSetpoint(kIntakePivotPushVoltage, ControlType.kVoltage);
+        controller.setSetpoint(kIntakePivotVoltage, ControlType.kVoltage);
         targetIntakePivotAngle = kIntakePivotDownAngle;
     }
 
-    public double getIntakePivotAngle() {
+    public void pullIntakePivot() {
+        controller.setSetpoint(-kIntakePivotVoltage, ControlType.kVoltage);
+        targetIntakePivotAngle = kIntakePivotUpAngle;
+    }
+
+    public double getIntakePivotAngleDeg() {
         double revs = encoder.getPosition();
         double deg = revs * 360.0;
-        deg -= kIntakePivotOffset;
+        deg /= kIntakePivotGearRatio;
+        deg -= intakePivotOffset;
         return deg;
     }
 
-    public double getIntakePivotAngleWrapped() {
-        double deg = getIntakePivotAngle();
+    public double getIntakePivotAngleDegWrapped() {
+        double deg = getIntakePivotAngleDeg();
         deg = ((deg + 180.0) % 360.0);
         if (deg < 0) deg += 360.0;
         return deg - 180.0;
     }
 
     public boolean isAngleInTolerance() {
-        return Math.abs(getIntakePivotAngleWrapped() - targetIntakePivotAngle) < kIntakePivotAngleTolerance;
+        return Math.abs(getIntakePivotAngleDegWrapped() - targetIntakePivotAngle) < kIntakePivotAngleTolerance;
     }
 
     public Command deployIntakeCommand() {
         if(!isDeployed) {
             return this.startEnd(
                 () -> deployIntake(), 
-                () -> controller.setSetpoint(0, ControlType.kVoltage)).withTimeout(.5);
+                () -> controller.setSetpoint(0, ControlType.kVoltage)).until(() -> isAngleInTolerance());
         } else {
-            return this.startEnd(null, null);
+            return null;
+        }
+    }
+
+    public Command pullIntakePivotCommand() {
+        if(isDeployed) {
+            return this.startEnd(
+                () -> pullIntakePivot(), 
+                () -> controller.setSetpoint(0, ControlType.kVoltage)).until(() -> isAngleInTolerance());
+        } else {
+            return null;
         }
     }
 
     @Override
     public void periodic() {
         // This method will be called once per scheduler run
+        logOutputs();
+    }
+
+    private void logOutputs() {
+        Logger.recordOutput("Is Deployed", isDeployed);
+        Logger.recordOutput("Is Angle in Tolerance", isAngleInTolerance());
     }
     
 }

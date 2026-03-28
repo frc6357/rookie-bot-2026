@@ -635,13 +635,6 @@ public final class Konstants
 
     public static final class IntakeConstants
     {
-        //PID and feedforward values for intake roller
-        public static final double kIntakeRollerP = 0.0;
-        public static final double kIntakeRollerI = 0.0;
-        public static final double kIntakeRollerD = 0.0;
-        public static final double kIntakeRollerF = 0.0;
-        public static final double kIntakeRollerS = 0.0;
-
         //PID and feedforward values for intake pivot
         public static final double kIntakePivotP = 0.0;
         public static final double kIntakePivotI = 0.0;
@@ -650,13 +643,13 @@ public final class Konstants
         public static final double kIntakePivotS = 0.0;
         
         //Intake Pivot Angle values
-        public static final double kIntakePivotOffset = 0.0;
+        public static final double kIntakePivotGearRatio = 1.0;
         public static final double kIntakePivotUpAngle = 0.0;
         public static final double kIntakePivotDownAngle = 90.0;
         public static final double kIntakePivotAngleTolerance = 0.5;
 
         public static final double kIntakeRollersVoltage = 6.0;
-        public static final double kIntakePivotPushVoltage = 6.0; //Temporary value
+        public static final double kIntakePivotVoltage = 6.0; //Temporary value
     }
 
     public static final String kCANivoreName = "SwerveCANivore";

@@ -4,12 +4,6 @@ import static frc.robot.Ports.IntakePorts.kIntakeRollerMotor;
 
 import org.littletonrobotics.junction.Logger;
 
-import static frc.robot.Konstants.IntakeConstants.kIntakeRollerP;
-import static frc.robot.Konstants.IntakeConstants.kIntakeRollerI;
-import static frc.robot.Konstants.IntakeConstants.kIntakeRollerD;
-import static frc.robot.Konstants.IntakeConstants.kIntakeRollerF;
-import static frc.robot.Konstants.IntakeConstants.kIntakeRollerS;
-
 import com.revrobotics.PersistMode;
 import com.revrobotics.ResetMode;
 import com.revrobotics.spark.SparkClosedLoopController;
@@ -33,12 +27,6 @@ public class SKIntakeRollers extends SubsystemBase {
         
         SparkFlexConfig config = new SparkFlexConfig();
         config.idleMode(IdleMode.kCoast);
-        config.closedLoop.p(kIntakeRollerP);
-        config.closedLoop.i(kIntakeRollerI);
-        config.closedLoop.d(kIntakeRollerD);
-        config.closedLoop.feedForward
-        .kV(kIntakeRollerF)
-        .kS(kIntakeRollerS);
         intakeRollerMotor.configure(config, ResetMode.kNoResetSafeParameters, PersistMode.kPersistParameters);
     }
 
