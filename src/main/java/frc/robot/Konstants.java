@@ -180,13 +180,6 @@ public final class Konstants
         /** Top motor inversion.    TODO: verify on robot. */
         public static final boolean kTopMotorInverted    = true;
 
-        /** Gear ratio from motor shaft to wheel (motor rotations per wheel rotation).
-         *  TODO: set actual gear ratio from mechanical design. */
-        public static final double kGearRatio = 1.0;
-
-        /** Wheel diameter in meters.  TODO: measure actual wheel. */
-        public static final double kWheelDiameterMeters = 0.1016; // 4 inches
-
         /** Idle RPM – slow spin to reduce spin-up time. */
         public static final double kIdleRPM = 200.0;
 
@@ -201,17 +194,61 @@ public final class Konstants
         public static final double kBottomP  = 0.0004;
         public static final double kBottomI  = 0.0;
         public static final double kBottomD  = 0.0;
-        public static final double kBottomFF = 0.000175;
+        public static final double kBottomFF = 0.00177; // NEO Vortex starting value: 1/565 ≈ 0.00177
 
         // Top Motor PID (Slot 0)
         // TODO: characterise with SysId or manual tuning.
         public static final double kTopP  = 0.0004;
         public static final double kTopI  = 0.0;
         public static final double kTopD  = 0.0;
-        public static final double kTopFF = 0.000175;
+        public static final double kTopFF = 0.00177; // NEO Vortex starting value: 1/565 ≈ 0.00177
 
         // TODO: Set actual shuttle target coordinates once field position is decided.
         public static final Translation2d kShuttleTarget = new Translation2d(0.0, 0.0);
+
+        // ── Shot Physics Constants ──────────────────────────────────────────
+        // Full calculation chain:
+        //   distance + angle → required exit velocity (projectile physics)
+        //   exit velocity → wheel surface speed (via slip factor)
+        //   wheel surface speed → motor RPM (via wheel diameter and gear ratio)
+
+        /** Fixed launch angle of the drum launcher in degrees above horizontal.
+         *  TODO: Measure on real robot. */
+        public static final double kLaunchAngleDegrees = 45.0;
+
+        /** Height difference in meters between the launcher exit and the hub opening.
+         *  Positive = launcher is below hub. Negative = launcher is above hub.
+         *  TODO: Measure on real robot. */
+        public static final double kLauncherHeightDeltaMeters = 0.5;
+
+        /** Diameter of the launcher wheel in meters.
+         *  TODO: Measure on real robot. */
+        public static final double kWheelDiameterMeters = 0.1016; // 4 inches placeholder
+
+        /** Gear ratio: motor rotations per wheel rotation.
+         *  TODO: Set from mechanical design. */
+        public static final double kGearRatio = 1.0;
+
+        /** Slip factor: accounts for ball deformation and wheel slip during launch.
+         *  Range: 0.85-0.95 typical. 1.0 = no slip (unrealistic).
+         *  TODO: Tune on real robot. */
+        public static final double kSlipFactor = 0.90;
+
+        /** Ratio of top roller RPM to bottom roller RPM.
+         *  Controls ball spin and trajectory arc.
+         *  > 1.0 = topspin (flatter), < 1.0 = backspin (more arc).
+         *  TODO: Tune on real robot. */
+        public static final double kTopRollerRatio = 1.0;
+
+        /** Minimum RPM to command regardless of distance calculation.
+         *  Prevents the formula from returning unrealistically low values.
+         *  TODO: Tune on real robot. */
+        public static final double kMinShotRPM = 1000.0;
+
+        /** Maximum RPM to command — hard cap for motor safety.
+         *  NEO Vortex free speed is ~6784 RPM. Stay well below this.
+         *  TODO: Verify with mechanical. */
+        public static final double kMaxShotRPM = 6000.0;
     }
 
     // ==================== Fuel Hunt Tuning ====================

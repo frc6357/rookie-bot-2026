@@ -33,7 +33,7 @@ import frc.robot.Ports.DrumLauncherPorts;
  * <p>Velocity closed-loop control is performed on-controller via
  * {@link SparkClosedLoopController}.  All tunable values (PID, gear ratio,
  * current limits, etc.) are placeholder constants at the top of this file and
- * marked with {@code TODO} where characterisation data is still needed.
+ * marked with {@code TODO} where actual data from our robot is still needed.
  */
 public class SK26DrumLauncher extends SubsystemBase {
 
@@ -41,15 +41,15 @@ public class SK26DrumLauncher extends SubsystemBase {
 
     /** Operating modes for the drum launcher. */
     public enum ShotMode {
-        /** Wheels stopped, no command. */
+        /** Wheels stopped. */
         IDLE,
         /** Scoring into the hub at a calculated velocity. */
         SCORE,
-        /** Shuttle / lob shot at reduced velocity. */
+        /** Scoring to a set point at a calculated velocity. */
         SHUTTLE,
         /** Operator-commanded RPM (bypass auto-calculations). */
         MANUAL,
-        /** Hard stop – wheels coast/brake to zero. */
+        /** Hard stop  */
         STOPPED
     }
 
@@ -176,18 +176,63 @@ public class SK26DrumLauncher extends SubsystemBase {
         lastDistanceMeters = distanceMeters;
         shotMode = mode;
 
-        // TODO: Replace with real distance-to-RPM lookup / polynomial.
-        //       This placeholder spins both wheels at a fixed speed.
-        double bottomRPM = 3000.0; // TODO: calculate from distanceMeters
-        double topRPM    = 3000.0; // TODO: calculate from distanceMeters
+        // ── Step 1: Projectile physics → required exit velocity ──────────────
+        // Formula: v = sqrt((g * d²) / (2 * cos²θ * (d * tanθ - h)))
+        // where d = distance (m), θ = launch angle, h = height delta (m), g = 9.81 m/s²
+        double g = 9.81;
+        double angleRad = Math.toRadians(DrumLauncherConstants.kLaunchAngleDegrees);
+        double cosA = Math.cos(angleRad);
+        double tanA = Math.tan(angleRad);
+        double h = DrumLauncherConstants.kLauncherHeightDeltaMeters;
+        double d = distanceMeters;
+
+        double denom = 2.0 * cosA * cosA * ((d * tanA) - h);
+        double exitVelocityMPS;
+        if (denom <= 0.0) {
+            // Degenerate case — distance too short or angle/height misconfigured.
+            // Fall back to minimum RPM and log a warning.
+            exitVelocityMPS = -1.0;
+        } else {
+            exitVelocityMPS = Math.sqrt((g * d * d) / denom);
+        }
+
+        // ── Step 2: Exit velocity → wheel surface speed ───────────────────────
+        // Divide by slip factor to account for ball deformation and wheel slip.
+        double wheelSurfaceSpeedMPS = exitVelocityMPS / DrumLauncherConstants.kSlipFactor;
+
+        // ── Step 3: Wheel surface speed → motor RPM ───────────────────────────
+        // RPM = (surfaceSpeed / circumference) * 60 * gearRatio
+        double circumference = Math.PI * DrumLauncherConstants.kWheelDiameterMeters;
+        double rawBottomRPM = (wheelSurfaceSpeedMPS / circumference) * 60.0 * DrumLauncherConstants.kGearRatio;
+
+        // Clamp to safe operating range
+        double bottomRPM = Math.max(DrumLauncherConstants.kMinShotRPM,
+                           Math.min(DrumLauncherConstants.kMaxShotRPM, rawBottomRPM));
+
+        // If denom was invalid, override to minimum RPM
+        if (exitVelocityMPS < 0.0) {
+            bottomRPM = DrumLauncherConstants.kMinShotRPM;
+            Logger.recordOutput("Launcher/ShotCalcWarning", "Invalid trajectory — check angle/height constants");
+        } else {
+            Logger.recordOutput("Launcher/ShotCalcWarning", "OK");
+        }
+
+        // ── Step 4: Top roller RPM via fixed ratio ────────────────────────────
+        double topRPM = bottomRPM * DrumLauncherConstants.kTopRollerRatio;
+
+        // Log intermediate values for tuning
+        Logger.recordOutput("Launcher/CalcExitVelocityMPS", exitVelocityMPS);
+        Logger.recordOutput("Launcher/CalcWheelSurfaceSpeedMPS", wheelSurfaceSpeedMPS);
+        Logger.recordOutput("Launcher/CalcRawBottomRPM", rawBottomRPM);
+
         setTargetRPMs(bottomRPM, topRPM);
     }
 
     // ========================== Command Factories ==========================
 
     /**
-     * Creates a command that holds the launcher in IDLE mode (slow spin to
-     * keep flywheels warm).  Runs forever until interrupted.
+     * Creates a command that holds the launcher in IDLE mode
+     * Runs forever until interrupted.
      *
      * @return the idle command
      */
