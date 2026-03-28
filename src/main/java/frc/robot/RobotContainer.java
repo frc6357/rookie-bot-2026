@@ -25,6 +25,7 @@ import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 import frc.lib.utils.SubsystemControls;
 import frc.lib.utils.filters.FilteredJoystick;
 import frc.lib.bindings.CommandBinder;
+import frc.robot.bindings.SK26DrumLauncherBinder;
 import frc.robot.bindings.SKSwerveBinder;
 import frc.robot.bindings.SKVisionBinder;
 import frc.robot.subsystems.drive.SKSwerve;
@@ -105,7 +106,6 @@ public class RobotContainer extends Robot{
                 m_visionContainer = Optional.of(new SKVision(m_swerveContainer));
                 m_visionInstance = m_visionContainer.get();
             }
-            // TODO: SK26DrumLauncher class is pending implementation
             if (subsystems.isDrumLauncherPresent()) {
                 drumLauncher = new SK26DrumLauncher();
                 m_drumLauncherContainer = Optional.of(drumLauncher);
@@ -127,6 +127,7 @@ public class RobotContainer extends Robot{
     {
         buttonBinders.add(new SKSwerveBinder(m_swerveContainer));
         buttonBinders.add(new SKVisionBinder(m_visionContainer, m_swerveContainer));
+        buttonBinders.add(new SK26DrumLauncherBinder(m_drumLauncherContainer, m_visionContainer));
         // Traversing through all the binding classes to actually bind the buttons
         for (CommandBinder subsystemGroup : buttonBinders)
         {

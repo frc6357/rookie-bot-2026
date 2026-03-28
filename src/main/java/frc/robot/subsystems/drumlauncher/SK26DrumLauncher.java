@@ -15,6 +15,9 @@ import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkFlexConfig;
 
+import java.util.function.Supplier;
+
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Konstants.DrumLauncherConstants;
 import frc.robot.Ports.DrumLauncherPorts;
@@ -119,8 +122,9 @@ public class SK26DrumLauncher extends SubsystemBase {
             ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters);
 
-        // Start in IDLE
+        // Start in IDLE and set the default command
         setIdle();
+        setDefaultCommand(idleCommand());
     }
 
     // ========================== Public API ==========================
@@ -166,16 +170,55 @@ public class SK26DrumLauncher extends SubsystemBase {
      * shot-math will be added later.
      *
      * @param distanceMeters distance from the robot to the scoring target
+     * @param mode           the {@link ShotMode} to set (e.g. SCORE or SHUTTLE)
      */
-    public void runAtDistance(double distanceMeters) {
+    public void runAtDistance(double distanceMeters, ShotMode mode) {
         lastDistanceMeters = distanceMeters;
-        shotMode = ShotMode.SCORE;
+        shotMode = mode;
 
         // TODO: Replace with real distance-to-RPM lookup / polynomial.
         //       This placeholder spins both wheels at a fixed speed.
         double bottomRPM = 3000.0; // TODO: calculate from distanceMeters
         double topRPM    = 3000.0; // TODO: calculate from distanceMeters
         setTargetRPMs(bottomRPM, topRPM);
+    }
+
+    // ========================== Command Factories ==========================
+
+    /**
+     * Creates a command that holds the launcher in IDLE mode (slow spin to
+     * keep flywheels warm).  Runs forever until interrupted.
+     *
+     * @return the idle command
+     */
+    public Command idleCommand() {
+        return run(() -> setIdle()).withName("LauncherIdle");
+    }
+
+    /**
+     * Creates a command that stops both launcher wheels.  Runs forever until
+     * interrupted.
+     *
+     * @return the stop command
+     */
+    public Command stopCommand() {
+        return run(() -> stop()).withName("LauncherStop");
+    }
+
+    /**
+     * Creates a command that sets the launcher to the given mode at the RPM
+     * calculated from the supplied distance.  The distance supplier is polled
+     * every cycle so the shot can track a moving target.  Runs forever until
+     * interrupted.
+     *
+     * @param distanceMetersSupplier supplier providing the current distance to
+     *                               the scoring target, in metres
+     * @param mode                   the {@link ShotMode} to set (e.g. SCORE or SHUTTLE)
+     * @return the run-at-distance command
+     */
+    public Command runAtDistanceCommand(Supplier<Double> distanceMetersSupplier, ShotMode mode) {
+        return run(() -> runAtDistance(distanceMetersSupplier.get(), mode))
+            .withName("LauncherRunAtDistance");
     }
 
     // ========================== Getters ==========================

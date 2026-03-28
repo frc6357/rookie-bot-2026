@@ -209,6 +209,9 @@ public final class Konstants
         public static final double kTopI  = 0.0;
         public static final double kTopD  = 0.0;
         public static final double kTopFF = 0.000175;
+
+        // TODO: Set actual shuttle target coordinates once field position is decided.
+        public static final Translation2d kShuttleTarget = new Translation2d(0.0, 0.0);
     }
 
     // ==================== Fuel Hunt Tuning ====================
