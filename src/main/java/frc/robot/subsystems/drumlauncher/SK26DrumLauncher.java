@@ -16,6 +16,8 @@ import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkFlexConfig;
 
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.Konstants.DrumLauncherConstants;
+import frc.robot.Ports.DrumLauncherPorts;
 
 /**
  * Drum launcher subsystem for FRC Team 6357 "Spring Konstant" – 2026.
@@ -48,50 +50,6 @@ public class SK26DrumLauncher extends SubsystemBase {
         STOPPED
     }
 
-    // ==================== Placeholder Constants ====================
-    // TODO: Replace placeholder values with characterised / measured values.
-
-    /** Bottom motor CAN ID. */
-    private static final int kBottomMotorCANID = 51;
-    /** Top motor CAN ID. */
-    private static final int kTopMotorCANID    = 52;
-
-    /** Bottom motor inversion. TODO: verify on robot. */
-    private static final boolean kBottomMotorInverted = false;
-    /** Top motor inversion.    TODO: verify on robot. */
-    private static final boolean kTopMotorInverted    = true;
-
-    /** Gear ratio from motor shaft to wheel (motor rotations per wheel rotation).
-     *  TODO: set actual gear ratio from mechanical design. */
-    private static final double kGearRatio = 1.0;
-
-    /** Wheel diameter in meters.  TODO: measure actual wheel. */
-    private static final double kWheelDiameterMeters = 0.1016; // 4 inches
-
-    /** Idle RPM – slow spin to reduce spin-up time. */
-    private static final double kIdleRPM = 200.0;
-
-    /** RPM tolerance for {@link #atTarget()} check. */
-    private static final double kRPMTolerance = 150.0;
-
-    // ----- Current Limits (placeholder) -----
-    /** Smart current limit in amps.  TODO: tune to prevent brownouts. */
-    private static final int kSmartCurrentLimitAmps = 40;
-
-    // ----- Bottom Motor PID (Slot 0) -----
-    // TODO: characterise with SysId or manual tuning.
-    private static final double kBottomP = 0.0004;
-    private static final double kBottomI = 0.0;
-    private static final double kBottomD = 0.0;
-    private static final double kBottomFF = 0.000175;
-
-    // ----- Top Motor PID (Slot 0) -----
-    // TODO: characterise with SysId or manual tuning.
-    private static final double kTopP  = 0.0004;
-    private static final double kTopI  = 0.0;
-    private static final double kTopD  = 0.0;
-    private static final double kTopFF = 0.000175;
-
     // ========================== Hardware ==========================
 
     private final SparkFlex m_bottomMotor;
@@ -114,8 +72,8 @@ public class SK26DrumLauncher extends SubsystemBase {
 
     public SK26DrumLauncher() {
         // --- Instantiate motors ---
-        m_bottomMotor = new SparkFlex(kBottomMotorCANID, MotorType.kBrushless);
-        m_topMotor    = new SparkFlex(kTopMotorCANID,    MotorType.kBrushless);
+        m_bottomMotor = new SparkFlex(DrumLauncherPorts.kBottomMotor.ID, MotorType.kBrushless);
+        m_topMotor    = new SparkFlex(DrumLauncherPorts.kTopMotor.ID,    MotorType.kBrushless);
 
         // --- Grab encoders and closed-loop controllers ---
         m_bottomEncoder    = m_bottomMotor.getEncoder();
@@ -125,17 +83,17 @@ public class SK26DrumLauncher extends SubsystemBase {
 
         // --- Configure bottom motor ---
         SparkFlexConfig bottomConfig = new SparkFlexConfig();
-        bottomConfig.inverted(kBottomMotorInverted);
+        bottomConfig.inverted(DrumLauncherConstants.kBottomMotorInverted);
         bottomConfig.idleMode(IdleMode.kCoast);
-        bottomConfig.smartCurrentLimit(kSmartCurrentLimitAmps);
+        bottomConfig.smartCurrentLimit(DrumLauncherConstants.kSmartCurrentLimitAmps);
         bottomConfig.encoder.velocityConversionFactor(1.0); // native RPM, no conversion
         bottomConfig.closedLoop
             .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-            .p(kBottomP)
-            .i(kBottomI)
-            .d(kBottomD);
+            .p(DrumLauncherConstants.kBottomP)
+            .i(DrumLauncherConstants.kBottomI)
+            .d(DrumLauncherConstants.kBottomD);
         bottomConfig.closedLoop.feedForward
-            .kV(kBottomFF);
+            .kV(DrumLauncherConstants.kBottomFF);
 
         m_bottomMotor.configure(
             bottomConfig,
@@ -144,17 +102,17 @@ public class SK26DrumLauncher extends SubsystemBase {
 
         // --- Configure top motor ---
         SparkFlexConfig topConfig = new SparkFlexConfig();
-        topConfig.inverted(kTopMotorInverted);
+        topConfig.inverted(DrumLauncherConstants.kTopMotorInverted);
         topConfig.idleMode(IdleMode.kCoast);
-        topConfig.smartCurrentLimit(kSmartCurrentLimitAmps);
+        topConfig.smartCurrentLimit(DrumLauncherConstants.kSmartCurrentLimitAmps);
         topConfig.encoder.velocityConversionFactor(1.0);
         topConfig.closedLoop
             .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-            .p(kTopP)
-            .i(kTopI)
-            .d(kTopD);
+            .p(DrumLauncherConstants.kTopP)
+            .i(DrumLauncherConstants.kTopI)
+            .d(DrumLauncherConstants.kTopD);
         topConfig.closedLoop.feedForward
-            .kV(kTopFF);
+            .kV(DrumLauncherConstants.kTopFF);
 
         m_topMotor.configure(
             topConfig,
@@ -191,7 +149,7 @@ public class SK26DrumLauncher extends SubsystemBase {
      */
     public void setIdle() {
         shotMode = ShotMode.IDLE;
-        setTargetRPMs(kIdleRPM, kIdleRPM);
+        setTargetRPMs(DrumLauncherConstants.kIdleRPM, DrumLauncherConstants.kIdleRPM);
     }
 
     /**
@@ -263,8 +221,8 @@ public class SK26DrumLauncher extends SubsystemBase {
      */
     @AutoLogOutput(key = "Launcher/AtTarget")
     public boolean atTarget() {
-        return Math.abs(getBottomRPM() - targetBottomRPM) <= kRPMTolerance
-            && Math.abs(getTopRPM()    - targetTopRPM)    <= kRPMTolerance;
+        return Math.abs(getBottomRPM() - targetBottomRPM) <= DrumLauncherConstants.kRPMTolerance
+            && Math.abs(getTopRPM()    - targetTopRPM)    <= DrumLauncherConstants.kRPMTolerance;
     }
 
     /**

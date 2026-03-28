@@ -172,6 +172,45 @@ public final class Konstants
 
     }
 
+    public static final class DrumLauncherConstants
+    {
+        // Motor inversion
+        /** Bottom motor inversion. TODO: verify on robot. */
+        public static final boolean kBottomMotorInverted = false;
+        /** Top motor inversion.    TODO: verify on robot. */
+        public static final boolean kTopMotorInverted    = true;
+
+        /** Gear ratio from motor shaft to wheel (motor rotations per wheel rotation).
+         *  TODO: set actual gear ratio from mechanical design. */
+        public static final double kGearRatio = 1.0;
+
+        /** Wheel diameter in meters.  TODO: measure actual wheel. */
+        public static final double kWheelDiameterMeters = 0.1016; // 4 inches
+
+        /** Idle RPM – slow spin to reduce spin-up time. */
+        public static final double kIdleRPM = 200.0;
+
+        /** RPM tolerance for atTarget() check. */
+        public static final double kRPMTolerance = 150.0;
+
+        /** Smart current limit in amps.  TODO: tune to prevent brownouts. */
+        public static final int kSmartCurrentLimitAmps = 40;
+
+        // Bottom Motor PID (Slot 0)
+        // TODO: characterise with SysId or manual tuning.
+        public static final double kBottomP  = 0.0004;
+        public static final double kBottomI  = 0.0;
+        public static final double kBottomD  = 0.0;
+        public static final double kBottomFF = 0.000175;
+
+        // Top Motor PID (Slot 0)
+        // TODO: characterise with SysId or manual tuning.
+        public static final double kTopP  = 0.0004;
+        public static final double kTopI  = 0.0;
+        public static final double kTopD  = 0.0;
+        public static final double kTopFF = 0.000175;
+    }
+
     // ==================== Fuel Hunt Tuning ====================
     // ▼▼▼  CHANGE THESE TO ADJUST FUEL HUNT BEHAVIOUR  ▼▼▼
     //

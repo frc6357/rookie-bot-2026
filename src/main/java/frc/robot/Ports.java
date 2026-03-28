@@ -147,6 +147,13 @@ public class Ports
         public static final CANPort kFeederMotor = new CANPort(43, busName);
         public static final CANPort kFeederFollowerMotor = new CANPort(44, busName);
     }
+
+    public static class DrumLauncherPorts
+    {
+        private static final String busName = "";
+        public static final CANPort kBottomMotor = new CANPort(51, busName);
+        public static final CANPort kTopMotor    = new CANPort(52, busName);
+    }
     
     public static class ClimbPorts
     {
