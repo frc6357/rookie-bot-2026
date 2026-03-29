@@ -165,8 +165,7 @@ public class Ports
     public static class IndexerPorts
     {
         private static final String busName = "";
-        public static final CANPort kIndexerMotor = new CANPort(55, busName);
-        //public static final CANPort kSpindexerMotor = new CANPort(60, busName);
+        public static final CANPort kIndexerMotor = new CANPort(40, busName);
     }
 
     public static class pickupOBPorts
