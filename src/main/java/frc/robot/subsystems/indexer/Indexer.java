@@ -19,7 +19,6 @@ public class Indexer extends SubsystemBase {
 
     Indexer() {
        SparkFlexConfig config = new SparkFlexConfig();
-       config.
     }
 
     @Override
