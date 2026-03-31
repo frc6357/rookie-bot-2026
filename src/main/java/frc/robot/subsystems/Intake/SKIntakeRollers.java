@@ -1,6 +1,13 @@
 package frc.robot.subsystems.Intake;
 
 import static frc.robot.Ports.IntakePorts.kIntakeRollerMotor;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersP;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersRadius;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersI;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersD;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersF;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersS;
+import static frc.robot.Konstants.IntakeConstants.kIntakeRollersTolerance;
 
 import org.littletonrobotics.junction.Logger;
 
@@ -21,12 +28,20 @@ public class SKIntakeRollers extends SubsystemBase {
     SparkFlex intakeRollerMotor = new SparkFlex(kIntakeRollerMotor.ID, MotorType.kBrushless);
     SparkClosedLoopController intakeRollerController = intakeRollerMotor.getClosedLoopController();
 
-    double targetVoltage;
+    double targetRPS;
 
     SKIntakeRollers() {
         
         SparkFlexConfig config = new SparkFlexConfig();
         config.idleMode(IdleMode.kCoast);
+        config.closedLoop.pid(
+            kIntakeRollersP,
+            kIntakeRollersI,
+            kIntakeRollersD
+        );
+        config.closedLoop.feedForward.kV(kIntakeRollersF);
+        config.closedLoop.feedForward.kS(kIntakeRollersS);
+
         intakeRollerMotor.configure(config, ResetMode.kNoResetSafeParameters, PersistMode.kPersistParameters);
     }
 
@@ -34,17 +49,22 @@ public class SKIntakeRollers extends SubsystemBase {
      * Method to run the intake rollers at a specified speed (in RPS)
      * @param voltage The desired speed of the intake rollers in revolutions per second
      */
-    public void runIntakeRollers(double voltage) {
-        targetVoltage = voltage;
-        intakeRollerController.setSetpoint(voltage, ControlType.kVoltage);
+    public void runIntakeRollers(double velocity) {
+        double rps = velocity/kIntakeRollersRadius;
+        targetRPS = rps;
+        intakeRollerController.setSetpoint(rps, ControlType.kVelocity);
     }
 
     /**
      * Method to stop the intake rollers by setting the motor speed to zero
      */
     public void stopIntakeRollers() {
-        targetVoltage = 0;
-        intakeRollerController.setSetpoint(0, ControlType.kVoltage);
+        targetRPS = 0;
+        intakeRollerController.setSetpoint(0, ControlType.kVelocity);
+    }
+
+    public boolean isRollersAtSpeed() {
+        return Math.abs(intakeRollerMotor.getEncoder().getVelocity()-targetRPS) < kIntakeRollersTolerance;
     }
 
     /**
@@ -65,7 +85,9 @@ public class SKIntakeRollers extends SubsystemBase {
     }
 
     private void logOutputs() {
-        Logger.recordOutput("Intake Roller Target Voltage", targetVoltage);
+        Logger.recordOutput("Intake Rollers Target RPS", targetRPS);
+        Logger.recordOutput("Is Intake Rollers at Speed", isRollersAtSpeed());
+        Logger.recordOutput("Intake Rollers RPS", intakeRollerMotor.getEncoder().getVelocity());
     }
     
 }
