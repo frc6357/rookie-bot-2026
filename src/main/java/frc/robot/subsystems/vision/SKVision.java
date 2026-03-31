@@ -7,6 +7,8 @@ import static edu.wpi.first.units.Units.RadiansPerSecond;
 import static frc.robot.Konstants.VisionConstants.kAprilTagFieldLayout;
 import static frc.robot.Konstants.VisionConstants.kAprilTagPipeline;
 
+import static frc.robot.Konstants.DrumLauncher.kHubTranslation;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -629,11 +631,6 @@ public class SKVision extends SubsystemBase {
         m_swerve.setVisionMeasurementStdDevs(stdDevs);
         m_swerve.addVisionMeasurement(integratedPose, timeStamp);
     }
-
-    // TODO: Update this constant once hub shift logic is in place
-    // TODO: Move kHubX and kHubY into Konstants.VisionConstants
-    private static final Translation2d kHubTranslation =
-            new Translation2d(0.0, 0.0); // TODO: set actual hub coordinates
 
     /**
      * Returns the straight-line distance in meters from the robot's current

@@ -170,7 +170,7 @@ public class SK26DrumLauncher extends SubsystemBase {
      * shot-math will be added later.
      *
      * @param distanceMeters distance from the robot to the scoring target
-     * @param mode           the {@link ShotMode} to set (e.g. SCORE or SHUTTLE)
+     * @param mode           the ShotMode to set (e.g. SCORE or SHUTTLE)
      */
     public void runAtDistance(double distanceMeters, ShotMode mode) {
         lastDistanceMeters = distanceMeters;
@@ -258,7 +258,7 @@ public class SK26DrumLauncher extends SubsystemBase {
      *
      * @param distanceMetersSupplier supplier providing the current distance to
      *                               the scoring target, in metres
-     * @param mode                   the {@link ShotMode} to set (e.g. SCORE or SHUTTLE)
+     * @param mode                   the ShotMode to set (e.g. SCORE or SHUTTLE)
      * @return the run-at-distance command
      */
     public Command runAtDistanceCommand(Supplier<Double> distanceMetersSupplier, ShotMode mode) {
@@ -292,19 +292,19 @@ public class SK26DrumLauncher extends SubsystemBase {
         return targetTopRPM;
     }
 
-    /** @return the current {@link ShotMode} */
+    /** @return the current ShotMode */
     @AutoLogOutput(key = "Launcher/ShotMode")
     public String getShotModeString() {
         return shotMode.name();
     }
 
-    /** @return the current {@link ShotMode} enum value */
+    /** @return the current ShotMode enum value */
     public ShotMode getShotMode() {
         return shotMode;
     }
 
     /**
-     * @return {@code true} if both wheels are within {@link #kRPMTolerance} of
+     * @return true if both wheels are within RPMTolerance of
      *         their target velocities
      */
     @AutoLogOutput(key = "Launcher/AtTarget")
@@ -317,10 +317,10 @@ public class SK26DrumLauncher extends SubsystemBase {
      * Indicates that the launcher is ready for a game piece to be fed.
      *
      * <p>Currently returns the same value as {@link #atTarget()}.  This may
-     * later include additional conditions (e.g.&nbsp;indexer state, minimum
+     * later include additional conditions (e.g. indexer state, minimum
      * RPM thresholds).
      *
-     * @return {@code true} when it is safe to feed a game piece
+     * @return true when it is safe to feed a game piece
      */
     @AutoLogOutput(key = "Launcher/ReadyToFeed")
     public boolean readyToFeed() {
