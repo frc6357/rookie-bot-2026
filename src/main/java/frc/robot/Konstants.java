@@ -349,6 +349,11 @@ public final class Konstants
 
         // Max voltage output for indexer motor (for brownout protection)
         public static final double kMaxIndexerVoltage = 7.0;
+
+        // for the pid stuff
+        public static final double kIndexerMotorP = 0.0;
+        public static final double kIndexerMotorI = 0.0;
+        public static final double kIndexerMotorD = 0.0;
     }
 
     /** Constants that are used when defining filters for controllers */

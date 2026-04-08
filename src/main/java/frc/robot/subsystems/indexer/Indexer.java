@@ -8,6 +8,11 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 // imports the variable for the motor port
 import static frc.robot.Ports.IndexerPorts.kIndexerMotor;
 
+// pid stuff
+import static frc.robot.Konstants.IndexerConstants.kIndexerMotorP;
+import static frc.robot.Konstants.IndexerConstants.kIndexerMotorI;
+import static frc.robot.Konstants.IndexerConstants.kIndexerMotorD;
+
 import com.revrobotics.PersistMode;
 import com.revrobotics.ResetMode;
 import com.revrobotics.spark.SparkClosedLoopController;
@@ -27,7 +32,7 @@ public class Indexer extends SubsystemBase {
         indexerMotor.configure(config, ResetMode.kNoResetSafeParameters, PersistMode.kPersistParameters);
     }
 
-    public void runMotor() {
+    public void pid_loop() {
 
     }
 
