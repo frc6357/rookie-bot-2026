@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pathplanner.lib.auto.AutoBuilder;
 
@@ -36,7 +37,7 @@ import frc.robot.subsystems.vision.SKVision;
  * periodic methods (other than the scheduler calls). Instead, the structure of the robot (including
  * subsystems, commands, and trigger mappings) should be declared here.
  */
-public class RobotContainer extends Robot{
+public class RobotContainer {
 
     // private final Telemetry logger = new Telemetry(TunerConstants.kSpeedAt12Volts.in(MetersPerSecond)); // "MaxSpeed"
 
@@ -57,7 +58,7 @@ public class RobotContainer extends Robot{
   // The list containing all the command binding classes
   public List<CommandBinder> buttonBinders = new ArrayList<CommandBinder>();
 
-  SendableChooser<Command> autoCommandSelector;
+  //SendableChooser<Command> autoCommandSelector;
 
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer()
@@ -66,14 +67,14 @@ public class RobotContainer extends Robot{
     configureSubsystems();
 
     // sets up autos needed for pathplanner
-    configurePathPlannerCommands();
+    //configurePathPlannerCommands();
 
     // Configure the trigger bindings
     configureButtonBindings();
   
-    autoCommandSelector = AutoBuilder.buildAutoChooser("Taxi");
-    //set delete old files = true in build.gradle to prevent sotrage of unused orphans
-    SmartDashboard.putData("Select an Auto", autoCommandSelector);
+    // autoCommandSelector = AutoBuilder.buildAutoChooser("Taxi");
+    // //set delete old files = true in build.gradle to prevent sotrage of unused orphans
+    // SmartDashboard.putData("Select an Auto", autoCommandSelector);
   }
   
   /**
@@ -84,6 +85,9 @@ public class RobotContainer extends Robot{
         File deployDirectory = Filesystem.getDeployDirectory();
 
         ObjectMapper mapper = new ObjectMapper();
+        // Allow missing boolean properties in the deploy JSON so teams don't need
+        // to list every possible subsystem in `deploy/Subsystems.json`.
+        mapper.configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, false);
         JsonFactory factory = new JsonFactory();
 
         try
@@ -104,7 +108,11 @@ public class RobotContainer extends Robot{
         }
         catch (IOException e)
         {
-            DriverStation.reportError("Failure to read Subsystem Control File!", e.getStackTrace());
+            // Provide fuller diagnostic output so the robot/DriverStation log shows the
+            // exception message and stacktrace. This helps identify why Jackson failed
+            // (missing file, mapping exception, permission error, etc.).
+            DriverStation.reportError("Failure to read Subsystem Control File! " + e.toString(), e.getStackTrace());
+            e.printStackTrace();
         }
     }
 
@@ -138,10 +146,10 @@ public class RobotContainer extends Robot{
      *
      * @return the command to run in autonomous
      */
-    public Command getAutonomousCommand()
-    {
-        return Commands.sequence(Commands.waitSeconds(0.01), autoCommandSelector.getSelected());
-    }
+    // public Command getAutonomousCommand()
+    // {
+    //     return Commands.sequence(Commands.waitSeconds(0.01), autoCommandSelector.getSelected());
+    // }
 
     public void testPeriodic()
     {
@@ -157,11 +165,6 @@ public class RobotContainer extends Robot{
     }
 
     public void matchInit()
-    {
-    }
-
-    @Override
-    public void teleopPeriodic()
     {
     }
 
