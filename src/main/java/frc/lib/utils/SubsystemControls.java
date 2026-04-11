@@ -11,60 +11,21 @@ public class SubsystemControls
 
     private final boolean swerve;
     private final boolean vision;
-    private final boolean climb;
-    private final boolean turret;
-    private final boolean launcher;
-    private final boolean bangbanglauncher;
-    private final boolean duallauncher;
-    private final boolean lights;
-    private final boolean intakepivot;
-    private final boolean intakerollers;
-    private final boolean indexer;
-    private final boolean feeder;
-    private final boolean fueldetection;
 
      /**  
      * @param swerve
      *            indicates if the swerve subsystem is present and should be enabled
-     * @param lights
-     *            indicates if the lights subsystem is present and should be enabled
-     * @param intakepivot
-     *            indicates if the intake pivot subsystem is present and should be enabled
-     * @param intakerollers
-     *            indicates if the intake rollers subsystem is present and should be enabled
      */
 
     public SubsystemControls(
         @JsonProperty(required = true, value = "swerve")      boolean swerve,
-        @JsonProperty(required = true, value = "vision")      boolean vision,
-        @JsonProperty(required = true, value = "climb")       boolean climb,
+        @JsonProperty(required = true, value = "vision")      boolean vision
 
-        @JsonProperty(required = true, value = "intakepivot")    boolean intakepivot,
-        @JsonProperty(required = true, value = "intakerollers")  boolean intakerollers,
-        @JsonProperty(required = true, value = "turret")      boolean turret,
-        @JsonProperty(required = true, value = "launcher")     boolean launcher,
-        @JsonProperty(required = true, value = "bangbanglauncher") boolean bangbanglauncher,
-        @JsonProperty(required = true, value = "duallauncher") boolean duallauncher,
-        @JsonProperty(required = true, value = "lights")      boolean lights,
-        @JsonProperty(required = true, value = "indexer")     boolean indexer,
-        @JsonProperty(required = true, value = "feeder")      boolean feeder,
-        @JsonProperty(required = true, value = "fueldetection") boolean fueldetection
     )
 
     {
         this.swerve = swerve;
         this.vision = vision;
-        this.climb = climb;
-        this.turret = turret;
-        this.launcher = launcher;
-        this.bangbanglauncher = bangbanglauncher;
-        this.duallauncher = duallauncher;
-        this.lights = lights;
-        this.intakepivot = intakepivot;
-        this.intakerollers = intakerollers;
-        this.indexer = indexer;
-        this.feeder = feeder;
-        this.fueldetection = fueldetection;
     }
 
 
@@ -80,38 +41,5 @@ public class SubsystemControls
     }
     public boolean isVisionPresent() {
         return vision;
-    }
-    public boolean isClimbPresent() {
-        return climb;
-    }
-    public boolean isTurretPresent() {
-        return turret;
-    }
-    public boolean isLauncherPresent() {
-        return launcher;
-    }
-    public boolean isBangBangLauncherPresent() {
-        return bangbanglauncher;
-    }
-    public boolean isDualLauncherPresent() {
-        return duallauncher;
-    }
-    public boolean isLightsPresent() {
-        return lights;
-    }
-    public boolean isIntakePivotPresent() {
-        return intakepivot;
-    }
-    public boolean isIntakeRollersPresent() {
-        return intakerollers;
-    }
-    public boolean isIndexerPresent() {
-        return indexer;
-    }
-    public boolean isFeederPresent() {
-        return feeder;
-    }
-    public boolean isFuelDetectionPresent() {
-        return fueldetection;
     }
 }
